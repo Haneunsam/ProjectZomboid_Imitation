@@ -5,6 +5,8 @@
 #include "PZInventoryComponent.h"
 #include "PZInventorySlotWidget.h"
 #include "PZItemData.h"
+#include "PZCharacter.h"
+#include "PZEquipSlotWidget.h"
 
 void UPZInventoryWidget::NativeConstruct()
 {
@@ -71,5 +73,29 @@ void UPZInventoryWidget::RefreshInventory()
 	{
 		FString WeightString = FString::Printf(TEXT("%.1f / %.1f kg"), CurrentWeight, MaxWeight);
 		WeightText->SetText(FText::FromString(WeightString));
+	}
+
+	// 4. 장비 슬롯 업데이트
+	APZCharacter* PZCharacter = Cast<APZCharacter>(GetOwningPlayerPawn());
+	if (PZCharacter)
+	{
+		// Primary 슬롯
+		if (Slot_Primary)
+		{
+			TObjectPtr<UPZItemData>* FoundItem = PZCharacter->EquippedItems.Find(EPZEquipmentSlot::Primary);
+			Slot_Primary->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Primary);
+		}
+		// Secondary 슬롯
+		if (Slot_Secondary)
+		{
+			TObjectPtr<UPZItemData>* FoundItem = PZCharacter->EquippedItems.Find(EPZEquipmentSlot::Secondary);
+			Slot_Secondary->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Secondary);
+		}
+		// Back 슬롯
+		if (Slot_Back)
+		{
+			TObjectPtr<UPZItemData>* FoundItem = PZCharacter->EquippedItems.Find(EPZEquipmentSlot::Back);
+			Slot_Back->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Back);
+		}
 	}
 }

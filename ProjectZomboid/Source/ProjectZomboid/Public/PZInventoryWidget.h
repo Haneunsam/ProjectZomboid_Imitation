@@ -39,6 +39,16 @@ protected:
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
 	TObjectPtr<UTextBlock> WeightText;
 
+	/** Equipment Slots */
+	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
+	TObjectPtr<class UPZEquipSlotWidget> Slot_Primary;
+
+	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
+	TObjectPtr<class UPZEquipSlotWidget> Slot_Secondary;
+
+	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
+	TObjectPtr<class UPZEquipSlotWidget> Slot_Back;
+
 	UPROPERTY(EditAnywhere, Category = "Inventory UI")
 	TSubclassOf<class UPZInventorySlotWidget> SlotWidgetClass;
 

@@ -53,10 +53,14 @@ APZCharacter::APZCharacter()
 	CameraBoom->bInheritYaw = false;
 	CameraBoom->bInheritRoll = false;
 
-	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
+
+	// Primary Weapon Mesh 초기화
+	PrimaryWeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PrimaryWeaponMesh"));
+	PrimaryWeaponMesh->SetupAttachment(GetMesh(), TEXT("Hand_R")); // 기본적으로 오른손 소켓에 부착
+	PrimaryWeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 캐릭터와 충돌 방지
 }
 
 void APZCharacter::BeginPlay()
@@ -346,6 +350,51 @@ void APZCharacter::DropItem(UPZItemData* Item)
 		DroppedItem->UpdateMeshFromData(); 
 
 		UE_LOG(LogTemp, Warning, TEXT("Dropped: %s"), *Item->ItemName.ToString());
+	}
+}
+
+void APZCharacter::EquipItem(UPZItemData* Item)
+{
+	if (!Item || Item->EquipSlot == EPZEquipmentSlot::None) return;
+
+	// 1. 이미 해당 슬롯에 장착된 아이템이 있다면 해제
+	UnequipItem(Item->EquipSlot);
+
+	// 2. 새로운 아이템 등록
+	EquippedItems.Add(Item->EquipSlot, Item);
+
+	// 3. 외형(Mesh) 업데이트 - 주무기(Primary) 예시
+	if (Item->EquipSlot == EPZEquipmentSlot::Primary)
+	{
+		if (PrimaryWeaponMesh && Item->ItemMesh)
+		{
+			PrimaryWeaponMesh->SetStaticMesh(Item->ItemMesh);
+			UE_LOG(LogTemp, Warning, TEXT("Equipped Weapon: %s"), *Item->ItemName.ToString());
+		}
+	}
+
+	// 4. UI 갱신 요청 (인벤토리 이벤트 재사용)
+	if (InventoryComponent)
+	{
+		InventoryComponent->OnInventoryChanged.Broadcast();
+	}
+}
+
+void APZCharacter::UnequipItem(EPZEquipmentSlot Slot)
+{
+	if (!EquippedItems.Contains(Slot)) return;
+
+	EquippedItems.Remove(Slot);
+
+	// 외형 제거
+	if (Slot == EPZEquipmentSlot::Primary)
+	{
+		if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
+	}
+
+	if (InventoryComponent)
+	{
+		InventoryComponent->OnInventoryChanged.Broadcast();
 	}
 }
 

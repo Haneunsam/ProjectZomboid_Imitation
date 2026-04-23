@@ -16,6 +16,18 @@ enum class EPZItemType : uint8
 };
 
 
+UENUM(BlueprintType)
+enum class EPZEquipmentSlot : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Primary UMETA(DisplayName = "Primary (Hand)"),
+	Secondary UMETA(DisplayName = "Secondary"),
+	Back UMETA(DisplayName = "Back"),
+	Body UMETA(DisplayName = "Body (Clothing)"),
+	Head UMETA(DisplayName = "Head")
+};
+
+
 UCLASS(BlueprintType)
 class PROJECTZOMBOID_API UPZItemData : public UPrimaryDataAsset
 {
@@ -45,4 +57,7 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Info")
 	EPZItemType ItemType;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Info")
+	EPZEquipmentSlot EquipSlot;
 };

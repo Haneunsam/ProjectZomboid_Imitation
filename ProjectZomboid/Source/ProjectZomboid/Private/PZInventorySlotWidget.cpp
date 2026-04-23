@@ -2,10 +2,18 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "PZItemData.h"
+#include "PZCharacter.h"
 
 void UPZInventorySlotWidget::UpdateSlot(UPZItemData* InItemData)
 {
-	if (!InItemData) return;
+	if (!InItemData)
+	{
+		ItemData = nullptr;
+		if (ItemName) ItemName->SetText(FText::GetEmpty());
+		if (ItemWeight) ItemWeight->SetText(FText::GetEmpty());
+		if (ItemIcon) ItemIcon->SetBrushFromTexture(nullptr);
+		return;
+	}
 
 	ItemData = InItemData;
 
@@ -31,5 +39,16 @@ void UPZInventorySlotWidget::UpdateSlot(UPZItemData* InItemData)
 	if (ItemIcon && ItemData->ItemIcon)
 	{
 		ItemIcon->SetBrushFromTexture(ItemData->ItemIcon);
+	}
+}
+
+void UPZInventorySlotWidget::UseItem()
+{
+	if (!ItemData) return;
+
+	APZCharacter* PZCharacter = Cast<APZCharacter>(GetOwningPlayerPawn());
+	if (PZCharacter)
+	{
+		PZCharacter->EquipItem(ItemData);
 	}
 }

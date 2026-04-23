@@ -34,4 +34,7 @@ protected:
 
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
 	TObjectPtr<UTextBlock> ItemWeight;
+
+	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
+	void UseItem();
 };

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "InputActionValue.h"
+#include "PZItemData.h"
 #include "PZCharacter.generated.h"
 
 class USpringArmComponent;
@@ -20,9 +21,6 @@ UCLASS()
 class PROJECTZOMBOID_API APZCharacter : public ACharacter
 {
 	GENERATED_BODY()
-
-public:
-	APZCharacter();
 
 protected:
 	virtual void BeginPlay() override;
@@ -102,11 +100,29 @@ protected:
 
 	void Interact();
 
-	// æ∆¿Ã≈€ πˆ∏Æ±‚
+	// ÏïÑÏù¥ÌÖú Î≤ÑÎ¶¨Í∏∞
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void DropItem(UPZItemData* Item);
 
 public:
+	APZCharacter();
+
+	/** Equipment Logic */
+	UFUNCTION(BlueprintCallable, Category = "Equipment")
+	void EquipItem(UPZItemData* Item);
+
+	UFUNCTION(BlueprintCallable, Category = "Equipment")
+	void UnequipItem(EPZEquipmentSlot Slot);
+
+	/** Equipment Slots */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
+	TMap<EPZEquipmentSlot, TObjectPtr<UPZItemData>> EquippedItems;
+
+	// Ï£ºÎ¨¥Í∏∞ Ïû•Ï∞© Ïãú Ïô∏ÌòïÏùÑ Î≥¥Ïó¨Ï§Ñ Ïª¥Ìè¨ÎÑåÌä∏
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
+	TObjectPtr<UStaticMeshComponent> PrimaryWeaponMesh;
+
+protected:
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 };
