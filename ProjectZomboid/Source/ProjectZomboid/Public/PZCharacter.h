@@ -13,6 +13,8 @@ class UInputMappingContext;
 class UInputAction;
 class UPZStatComponent;
 class UWidgetComponent;
+class UPZInventoryComponent;
+class UPZInventoryWidget;
 
 UCLASS()
 class PROJECTZOMBOID_API APZCharacter : public ACharacter
@@ -47,12 +49,24 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* SprintAction;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventoryAction;
+
 	/** Stats Component */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
 	UPZStatComponent* StatComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
 	UWidgetComponent* StaminaWidget;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")
+	UPZInventoryComponent* InventoryComponent;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<UPZInventoryWidget> InventoryWidgetClass;
+
+	UPROPERTY()
+	UPZInventoryWidget* InventoryWidget;
 
 	/** Movement Properties */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
@@ -64,13 +78,33 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float SprintStaminaCost = 10.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InteractAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
+	TSubclassOf<class APZItemActor> ItemActorClass;
+
+	float BaseWalkSpeed;
+	float BaseSprintSpeed;
+
 	bool bIsSprinting = false;
 
 	void Move(const FInputActionValue& Value);
 	void StartSprint();
 	void StopSprint();
 
+	void ToggleInventory();
+
+	UFUNCTION()
+	void UpdateMovementSpeed();
+
 	void LookAtMouseCursor();
+
+	void Interact();
+
+	// 아이템 버리기
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	void DropItem(UPZItemData* Item);
 
 public:
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
