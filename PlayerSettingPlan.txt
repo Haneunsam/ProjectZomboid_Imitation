@@ -1,0 +1,31 @@
+[Project Zomboid Imitation - 1일차 플레이어 세팅 상세 플랜]
+
+1. 구현된 핵심 클래스 및 구조
+- APZCharacter: 플레이어 메인 클래스. 카메라(SpringArm, Camera), 입력 처리, 회전 로직 포함.
+- UPZStatComponent: 체력(Health) 및 스태미나(Stamina) 관리 기능.
+- APZGameMode: 기본 Pawn을 APZCharacter로 지정.
+
+2. 이동 로직 (Movement Logic)
+- 입력 방식: Enhanced Input (IA_Move 2D Axis).
+- 방향 계산: W 입력 시 (1, 1, 0) 방향으로 고정 이동하여 월드 대각선(아이소메트릭 격자)을 따름.
+- 로직 흐름:
+  - ForwardVector = FVector(1, 1, 0).GetSafeNormal();
+  - RightVector = FVector(1, -1, 0).GetSafeNormal();
+  - AddMovementInput을 사용하여 입력값에 따른 월드 이동 수행.
+
+3. 회전 로직 (Rotation Logic)
+- 방식: 마우스 커서 추적 회전.
+- 로직 흐름:
+  - GetHitResultUnderCursor를 통해 마우스가 가리키는 지점 획득.
+  - FindLookAtRotation으로 캐릭터 위치에서 타겟 지점까지의 각도 계산.
+  - RInterpTo를 통해 부드럽게 캐릭터의 Yaw 회전값을 업데이트.
+
+4. 스태미나 및 달리기 (Stamina & Sprint)
+- 기능: Shift 입력 시 속도 증가 및 스태미나 소모.
+- 로직: TickComponent에서 달리기가 아닐 때 스태미나 자동 회복 로직 실행.
+
+5. 에디터 필수 설정 (IMC)
+- W 키: Swizzle Input Axis Values 추가 (Y축 전환)
+- S 키: Swizzle Input Axis Values + Negate 추가
+- A 키: Negate 추가
+- D 키: 설정 없음 (기본 X축)

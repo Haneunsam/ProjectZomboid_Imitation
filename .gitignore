@@ -1,0 +1,53 @@
+# Unreal Engine Standard Gitignore
+
+# --- Unreal Engine Temporary / Generated Files ---
+# Project root or subfolder temp files
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+FileOpenOrder/
+.vs/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+*.ignore
+*.pyc
+
+# Nested folder temp files (Matches any subfolder)
+**/Binaries/
+**/Build/
+**/DerivedDataCache/
+**/Intermediate/
+**/Saved/
+
+# --- OS Specific Files ---
+.DS_Store
+*.swp
+*.out
+Thumb.db
+
+# --- Build Artifacts ---
+*.apk
+*.ipa
+*.pdb
+*.obj
+*.exe
+
+# --- Large Files & Assets ---
+# Note: GitHub has a 100MB limit per file. 
+# It is highly recommended to use Git LFS for the following extensions:
+# *.uasset
+# *.umap
+# *.zip
+# *.psd
+
+# If you are manually splitting large files into parts (e.g., .001, .002), 
+# you can track them while ignoring the original large source file.
+# Example: 
+# /BigFile.zip (Add this to ignore)
+# /BigFile.zip.00* (This will be tracked)
