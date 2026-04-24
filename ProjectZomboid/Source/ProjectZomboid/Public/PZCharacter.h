@@ -34,6 +34,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	UCameraComponent* FollowCamera;
 
+	/** Equipment Render Camera */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+	class USceneCaptureComponent2D* EquipmentCaptureComponent;
+
 	/** Input Actions */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputMappingContext* DefaultMappingContext;
@@ -93,16 +97,15 @@ protected:
 
 	void ToggleInventory();
 
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ToggleEquipment();
+
 	UFUNCTION()
 	void UpdateMovementSpeed();
 
 	void LookAtMouseCursor();
 
 	void Interact();
-
-	// 아이템 버리기
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	void DropItem(UPZItemData* Item);
 
 public:
 	APZCharacter();
@@ -114,6 +117,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Equipment")
 	void UnequipItem(EPZEquipmentSlot Slot);
 
+	// 위젯에서 접근해야 하는 UI 요소들
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<class UPZEquipmentWidget> EquipmentWidgetClass;
+
+	UPROPERTY()
+	class UPZEquipmentWidget* EquipmentWidget;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<class UPZContextMenuWidget> ContextMenuClass;
+
+	UPROPERTY()
+	class UPZContextMenuWidget* ActiveContextMenu;
+
+	// 아이템 버리기
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	void DropItem(UPZItemData* Item);
+
 	/** Equipment Slots */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
 	TMap<EPZEquipmentSlot, TObjectPtr<UPZItemData>> EquippedItems;
@@ -121,6 +141,21 @@ public:
 	// 주무기 장착 시 외형을 보여줄 컴포넌트
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
 	TObjectPtr<UStaticMeshComponent> PrimaryWeaponMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
+	TObjectPtr<USkeletalMeshComponent> TopMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
+	TObjectPtr<USkeletalMeshComponent> BottomMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
+	TObjectPtr<USkeletalMeshComponent> ShoesMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
+	TObjectPtr<USkeletalMeshComponent> HeadMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
+	TObjectPtr<USkeletalMeshComponent> BackMesh;
 
 protected:
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }

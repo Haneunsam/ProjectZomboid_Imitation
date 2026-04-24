@@ -3,6 +3,9 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "PZItemData.h"
+#include "Input/Reply.h"
+#include "Input/Events.h"
+#include "Layout/Geometry.h"
 #include "PZEquipSlotWidget.generated.h"
 
 class UImage;
@@ -32,9 +35,19 @@ public:
 	EPZEquipmentSlot SlotType;
 
 protected:
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
 	TObjectPtr<UImage> ItemIcon;
 
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
 	TObjectPtr<UTextBlock> ItemName;
+
+	// 슬롯 부위 표시 (예: "주무기", "상의", "하의")
+	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
+	TObjectPtr<UTextBlock> SlotLabel;
+
+private:
+	// 슬롯 타입을 한글 이름으로 변환
+	static FText GetSlotDisplayName(EPZEquipmentSlot Slot);
 };

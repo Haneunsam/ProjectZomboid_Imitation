@@ -20,11 +20,13 @@ UENUM(BlueprintType)
 enum class EPZEquipmentSlot : uint8
 {
 	None UMETA(DisplayName = "None"),
-	Primary UMETA(DisplayName = "Primary (Hand)"),
-	Secondary UMETA(DisplayName = "Secondary"),
-	Back UMETA(DisplayName = "Back"),
-	Body UMETA(DisplayName = "Body (Clothing)"),
-	Head UMETA(DisplayName = "Head")
+	Primary UMETA(DisplayName = "Primary (주 무기)"),
+	Secondary UMETA(DisplayName = "Secondary(보조 무기)"),
+	Back UMETA(DisplayName = "Back(가방)"),
+	Head UMETA(DisplayName = "Head (머리)"),
+	Top UMETA(DisplayName = "Top (상의)"),
+	Bottom UMETA(DisplayName = "Bottom (하의)"),
+	Shoes UMETA(DisplayName = "Shoes (신발)")
 };
 
 

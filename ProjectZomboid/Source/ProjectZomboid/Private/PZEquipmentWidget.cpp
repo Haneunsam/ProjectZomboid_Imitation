@@ -1,0 +1,51 @@
+#include "PZEquipmentWidget.h"
+#include "PZEquipSlotWidget.h"
+#include "PZCharacter.h"
+
+void UPZEquipmentWidget::RefreshEquipment(APZCharacter* Character)
+{
+	if (!Character) return;
+
+	// Primary 슬롯
+	if (Slot_Primary)
+	{
+		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Primary);
+		Slot_Primary->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Primary);
+	}
+	// Secondary 슬롯
+	if (Slot_Secondary)
+	{
+		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Secondary);
+		Slot_Secondary->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Secondary);
+	}
+	// Back 슬롯
+	if (Slot_Back)
+	{
+		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Back);
+		Slot_Back->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Back);
+	}
+	// Head 슬롯
+	if (Slot_Head)
+	{
+		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Head);
+		Slot_Head->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Head);
+	}
+	// Top 슬롯
+	if (Slot_Top)
+	{
+		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Top);
+		Slot_Top->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Top);
+	}
+	// Bottom 슬롯
+	if (Slot_Bottom)
+	{
+		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Bottom);
+		Slot_Bottom->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Bottom);
+	}
+	// Shoes 슬롯
+	if (Slot_Shoes)
+	{
+		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Shoes);
+		Slot_Shoes->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Shoes);
+	}
+}

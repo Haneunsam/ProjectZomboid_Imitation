@@ -15,6 +15,9 @@
 #include "PZItemActor.h"
 #include "PZItemData.h"
 #include "DrawDebugHelpers.h" // 범위를 보여주는 헤더
+#include "PZEquipmentWidget.h"
+#include "PZContextMenuWidget.h"
+#include "Components/SceneCaptureComponent2D.h"
 
 APZCharacter::APZCharacter()
 {
@@ -61,6 +64,58 @@ APZCharacter::APZCharacter()
 	PrimaryWeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PrimaryWeaponMesh"));
 	PrimaryWeaponMesh->SetupAttachment(GetMesh(), TEXT("Hand_R")); // 기본적으로 오른손 소켓에 부착
 	PrimaryWeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 캐릭터와 충돌 방지
+
+	// 의류 메시들 초기화 및 부착
+	TopMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("TopMesh"));
+	TopMesh->SetupAttachment(GetMesh());
+	TopMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	BottomMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("BottomMesh"));
+	BottomMesh->SetupAttachment(GetMesh());
+	BottomMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	ShoesMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ShoesMesh"));
+	ShoesMesh->SetupAttachment(GetMesh());
+	ShoesMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	HeadMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("HeadMesh"));
+	HeadMesh->SetupAttachment(GetMesh());
+	HeadMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	BackMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("BackMesh"));
+	BackMesh->SetupAttachment(GetMesh());
+	BackMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Equipment Capture Component (3D 캐릭터 렌더링용)
+	EquipmentCaptureComponent = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("EquipmentCaptureComponent"));
+	EquipmentCaptureComponent->SetupAttachment(RootComponent);
+	EquipmentCaptureComponent->SetRelativeLocation(FVector(150.0f, 0.0f, 0.0f));
+	EquipmentCaptureComponent->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
+
+	// 플레이어와 장비 메시만 렌더링 (다른 액터/메시 제외)
+	EquipmentCaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+
+	// 캐릭터 본체 + 장비 메시들을 렌더 대상에 추가
+	EquipmentCaptureComponent->ShowOnlyComponents.Add(GetMesh());
+	EquipmentCaptureComponent->ShowOnlyComponents.Add(PrimaryWeaponMesh);
+	EquipmentCaptureComponent->ShowOnlyComponents.Add(TopMesh);
+	EquipmentCaptureComponent->ShowOnlyComponents.Add(BottomMesh);
+	EquipmentCaptureComponent->ShowOnlyComponents.Add(ShoesMesh);
+	EquipmentCaptureComponent->ShowOnlyComponents.Add(HeadMesh);
+	EquipmentCaptureComponent->ShowOnlyComponents.Add(BackMesh);
+
+	// 조명 고정 (외부 조명 영향 제거)
+	EquipmentCaptureComponent->bCaptureEveryFrame = false; // 필요할 때만 캡처
+	EquipmentCaptureComponent->bCaptureOnMovement = false;
+	EquipmentCaptureComponent->ShowFlags.SetLighting(true);
+	EquipmentCaptureComponent->ShowFlags.SetPostProcessing(true);
+
+	// PostProcess로 고정 노출값 설정 (외부 밝기 무관하게 일정한 밝기 유지)
+	EquipmentCaptureComponent->PostProcessSettings.bOverride_AutoExposureMethod = true;
+	EquipmentCaptureComponent->PostProcessSettings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+	EquipmentCaptureComponent->PostProcessSettings.bOverride_AutoExposureBias = true;
+	EquipmentCaptureComponent->PostProcessSettings.AutoExposureBias = 10.0f; // 밝기 조절 (필요시 BP에서 세부조정)
+	EquipmentCaptureComponent->PostProcessBlendWeight = 1.0f;
 }
 
 void APZCharacter::BeginPlay()
@@ -111,6 +166,17 @@ void APZCharacter::BeginPlay()
 	else
 	{
 		UE_LOG(LogTemp, Error, TEXT("InventoryWidgetClass is NOT SET in Character BP!"));
+	}
+
+	// 장비 위젯 생성
+	if (EquipmentWidgetClass)
+	{
+		EquipmentWidget = CreateWidget<UPZEquipmentWidget>(GetWorld(), EquipmentWidgetClass);
+		if (EquipmentWidget)
+		{
+			EquipmentWidget->AddToViewport();
+			EquipmentWidget->SetVisibility(ESlateVisibility::Hidden);
+		}
 	}
 }
 
@@ -188,22 +254,90 @@ void APZCharacter::ToggleInventory()
 
 	if (InventoryWidget->GetVisibility() == ESlateVisibility::Hidden)
 	{
-		InventoryWidget->SetVisibility(ESlateVisibility::Visible);
-		
+		// SelfHitTestInvisible: 위젯 자체는 클릭 통과, 자식(슬롯/버튼)만 클릭 가능
+		InventoryWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
+	else
+	{
+		InventoryWidget->SetVisibility(ESlateVisibility::Hidden);
+	}
+
+	// 컨텍스트 메뉴가 열려있다면 닫기
+	if (ActiveContextMenu)
+	{
+		ActiveContextMenu->RemoveFromParent();
+		ActiveContextMenu = nullptr;
+	}
+
+	// 인벤토리나 장비창 중 하나라도 열려있으면 UI 입력 모드 활성화
+	bool bIsAnyUIOpen = (InventoryWidget->GetVisibility() != ESlateVisibility::Hidden) || 
+						(EquipmentWidget && EquipmentWidget->GetVisibility() != ESlateVisibility::Hidden);
+
+	if (bIsAnyUIOpen)
+	{
 		FInputModeGameAndUI InputMode;
-		InputMode.SetWidgetToFocus(InventoryWidget->GetCachedWidget());
 		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetHideCursorDuringCapture(false);
 		
 		PC->SetInputMode(InputMode);
 		PC->bShowMouseCursor = true;
 	}
 	else
 	{
-		InventoryWidget->SetVisibility(ESlateVisibility::Hidden);
-		
 		FInputModeGameOnly InputMode;
 		PC->SetInputMode(InputMode);
-		PC->bShowMouseCursor = true; 
+		PC->bShowMouseCursor = true;
+	}
+}
+
+void APZCharacter::ToggleEquipment()
+{
+	if (!EquipmentWidget) return;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+
+	if (EquipmentWidget->GetVisibility() == ESlateVisibility::Hidden)
+	{
+		EquipmentWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		EquipmentWidget->RefreshEquipment(this);
+
+		// 장비창을 열 때 캐릭터 렌더 갱신
+		if (EquipmentCaptureComponent)
+		{
+			EquipmentCaptureComponent->CaptureScene();
+		}
+	}
+	else
+	{
+		EquipmentWidget->SetVisibility(ESlateVisibility::Hidden);
+	}
+
+	// 컨텍스트 메뉴가 열려있다면 닫기
+	if (ActiveContextMenu)
+	{
+		ActiveContextMenu->RemoveFromParent();
+		ActiveContextMenu = nullptr;
+	}
+
+	// 인벤토리나 장비창 중 하나라도 열려있으면 UI 입력 모드 활성화
+	bool bIsAnyUIOpen = (InventoryWidget && InventoryWidget->GetVisibility() != ESlateVisibility::Hidden) || 
+						(EquipmentWidget->GetVisibility() != ESlateVisibility::Hidden);
+
+	if (bIsAnyUIOpen)
+	{
+		FInputModeGameAndUI InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetHideCursorDuringCapture(false);
+
+		PC->SetInputMode(InputMode);
+		PC->bShowMouseCursor = true;
+	}
+	else
+	{
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+		PC->bShowMouseCursor = true;
 	}
 }
 
@@ -314,87 +448,169 @@ void APZCharacter::Interact()
 
 }
 
-void APZCharacter::DropItem(UPZItemData* Item)
-{
-	if (!Item)
-	{
-		UE_LOG(LogTemp, Error, TEXT("DropItem failed: Item is NULL!"));
-		return;
-	}
-	if (!InventoryComponent)
-	{
-		UE_LOG(LogTemp, Error, TEXT("DropItem failed: InventoryComponent is NULL!"));
-		return;
-	}
-	if (!ItemActorClass)
-	{
-		UE_LOG(LogTemp, Error, TEXT("DropItem failed: ItemActorClass is NOT SET in Character BP!"));
-		return;
-	}
-
-	// 1. 인벤토리에서 제거
-	InventoryComponent->RemoveItem(Item);
-
-	// 2. 스폰 위치 및 파라미터
-	FVector SpawnLoc = GetActorLocation() + GetActorForwardVector() * 100.0f + FVector(0, 0, 50);
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	// 3. 스폰
-	APZItemActor* DroppedItem = GetWorld()->SpawnActor<APZItemActor>(ItemActorClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
-
-	if (DroppedItem)
-	{
-		DroppedItem->ItemData = Item;
-		// 이제 public으로 변경했으므로 호출 가능합니다.
-		DroppedItem->UpdateMeshFromData(); 
-
-		UE_LOG(LogTemp, Warning, TEXT("Dropped: %s"), *Item->ItemName.ToString());
-	}
-}
-
 void APZCharacter::EquipItem(UPZItemData* Item)
 {
-	if (!Item || Item->EquipSlot == EPZEquipmentSlot::None) return;
+	if (!Item || !InventoryComponent) return;
 
-	// 1. 이미 해당 슬롯에 장착된 아이템이 있다면 해제
-	UnequipItem(Item->EquipSlot);
+	// 1. 해당 슬롯에 이미 장착된 아이템이 있다면 해제
+	if (EquippedItems.Contains(Item->EquipSlot))
+	{
+		UnequipItem(Item->EquipSlot);
+	}
 
 	// 2. 새로운 아이템 등록
 	EquippedItems.Add(Item->EquipSlot, Item);
-
-	// 3. 외형(Mesh) 업데이트 - 주무기(Primary) 예시
-	if (Item->EquipSlot == EPZEquipmentSlot::Primary)
+	
+	// 3. 외형(Mesh) 업데이트
+	if (Item->EquipSlot == EPZEquipmentSlot::Primary && PrimaryWeaponMesh)
 	{
-		if (PrimaryWeaponMesh && Item->ItemMesh)
+		PrimaryWeaponMesh->SetStaticMesh(Item->ItemMesh);
+	}
+	else if (Item->ItemSkeletalMesh) // 의류(Skeletal Mesh) 장착
+	{
+		USkeletalMeshComponent* TargetComp = nullptr;
+		switch (Item->EquipSlot)
 		{
-			PrimaryWeaponMesh->SetStaticMesh(Item->ItemMesh);
-			UE_LOG(LogTemp, Warning, TEXT("Equipped Weapon: %s"), *Item->ItemName.ToString());
+		case EPZEquipmentSlot::Top: TargetComp = TopMesh; break;
+		case EPZEquipmentSlot::Bottom: TargetComp = BottomMesh; break;
+		case EPZEquipmentSlot::Shoes: TargetComp = ShoesMesh; break;
+		case EPZEquipmentSlot::Head: TargetComp = HeadMesh; break;
+		case EPZEquipmentSlot::Back: TargetComp = BackMesh; break;
+		}
+
+		if (TargetComp)
+		{
+			TargetComp->SetSkeletalMeshAsset(Item->ItemSkeletalMesh);
+			TargetComp->SetLeaderPoseComponent(GetMesh()); // 애니메이션 동기화
 		}
 	}
 
-	// 4. UI 갱신 요청 (인벤토리 이벤트 재사용)
-	if (InventoryComponent)
+	UpdateMovementSpeed();
+
+	// 4. UI 즉시 갱신
+	if (EquipmentWidget)
 	{
-		InventoryComponent->OnInventoryChanged.Broadcast();
+		EquipmentWidget->RefreshEquipment(this);
+	}
+	if (InventoryWidget)
+	{
+		InventoryWidget->RefreshInventory();
+	}
+
+	// 5. 장비창 렌더 갱신
+	if (EquipmentCaptureComponent)
+	{
+		EquipmentCaptureComponent->CaptureScene();
 	}
 }
 
 void APZCharacter::UnequipItem(EPZEquipmentSlot Slot)
 {
-	if (!EquippedItems.Contains(Slot)) return;
-
-	EquippedItems.Remove(Slot);
-
-	// 외형 제거
-	if (Slot == EPZEquipmentSlot::Primary)
+	if (EquippedItems.Contains(Slot))
 	{
-		if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
+		EquippedItems.Remove(Slot);
+
+		// 외형 제거
+		if (Slot == EPZEquipmentSlot::Primary && PrimaryWeaponMesh)
+		{
+			PrimaryWeaponMesh->SetStaticMesh(nullptr);
+		}
+		else // 의류 제거
+		{
+			USkeletalMeshComponent* TargetComp = nullptr;
+			switch (Slot)
+			{
+			case EPZEquipmentSlot::Top: TargetComp = TopMesh; break;
+			case EPZEquipmentSlot::Bottom: TargetComp = BottomMesh; break;
+			case EPZEquipmentSlot::Shoes: TargetComp = ShoesMesh; break;
+			case EPZEquipmentSlot::Head: TargetComp = HeadMesh; break;
+			case EPZEquipmentSlot::Back: TargetComp = BackMesh; break;
+			}
+
+			if (TargetComp)
+			{
+				TargetComp->SetSkeletalMeshAsset(nullptr);
+			}
+		}
+
+		UpdateMovementSpeed();
+
+		// UI 즉시 갱신
+		if (EquipmentWidget)
+		{
+			EquipmentWidget->RefreshEquipment(this);
+		}
+		if (InventoryWidget)
+		{
+			InventoryWidget->RefreshInventory();
+		}
+
+		// 장비창 렌더 갱신
+		if (EquipmentCaptureComponent)
+		{
+			EquipmentCaptureComponent->CaptureScene();
+		}
+	}
+}
+
+void APZCharacter::DropItem(UPZItemData* Item)
+{
+	if (!Item || !InventoryComponent) return;
+
+	// 1. 장착 중인 아이템이라면 먼저 장착 해제
+	for (auto& Elem : EquippedItems)
+	{
+		if (Elem.Value == Item)
+		{
+			UnequipItem(Elem.Key);
+			break;
+		}
 	}
 
-	if (InventoryComponent)
+	// 2. ItemActorClass 확인
+	if (!ItemActorClass)
 	{
-		InventoryComponent->OnInventoryChanged.Broadcast();
+		UE_LOG(LogTemp, Error, TEXT("DropItem FAILED: ItemActorClass is NOT SET in Character BP!"));
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("ERROR: ItemActorClass not set!"));
+		// 클래스가 없어도 인벤토리에서는 제거
+		InventoryComponent->RemoveItem(Item);
+		if (InventoryWidget) InventoryWidget->RefreshInventory();
+		if (EquipmentWidget) EquipmentWidget->RefreshEquipment(this);
+		return;
+	}
+
+	// 3. 스폰 전에 아이템 데이터를 임시 보관 (RemoveItem 후 GC 방지)
+	UPZItemData* DroppedItemData = Item;
+
+	// 4. 인벤토리에서 제거
+	InventoryComponent->RemoveItem(Item);
+	
+	// 5. 월드에 스폰
+	FVector SpawnLoc = GetActorLocation() + GetActorForwardVector() * 100.0f + FVector(0, 0, 50);
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	APZItemActor* DroppedItem = GetWorld()->SpawnActor<APZItemActor>(ItemActorClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+	if (DroppedItem)
+	{
+		DroppedItem->ItemData = DroppedItemData;
+		DroppedItem->UpdateMeshFromData(); 
+		UE_LOG(LogTemp, Warning, TEXT("Dropped Item: %s at %s"), *DroppedItemData->ItemName.ToString(), *SpawnLoc.ToString());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("DropItem FAILED: SpawnActor returned NULL!"));
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("ERROR: Failed to spawn dropped item!"));
+	}
+
+	// 6. UI 최종 갱신
+	if (InventoryWidget)
+	{
+		InventoryWidget->RefreshInventory();
+	}
+	if (EquipmentWidget)
+	{
+		EquipmentWidget->RefreshEquipment(this);
 	}
 }
 

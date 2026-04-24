@@ -24,7 +24,9 @@ void UPZInventoryComponent::AddItem(UPZItemData* NewItem)
 {
 	if (NewItem)
 	{
-		Items.Add(NewItem);
+		// 아이템을 고유한 인스턴스로 복제하여 추가합니다. (같은 아이템 중복 장착 방지)
+		UPZItemData* InstanceItem = DuplicateObject<UPZItemData>(NewItem, this);
+		Items.Add(InstanceItem);
 		UpdateTotalWeight();
 	}
 }

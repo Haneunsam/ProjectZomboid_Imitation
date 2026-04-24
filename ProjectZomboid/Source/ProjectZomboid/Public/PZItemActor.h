@@ -26,8 +26,8 @@ public:
 	TObjectPtr<UPZItemData> ItemData;
 
 	// 아이템의 외형 (월드에서는 스태틱 메시만 사용)
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item")
-	TObjectPtr<UStaticMeshComponent> MeshComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<class UStaticMeshComponent> MeshComponent;
 
 	// 플레이어 감지 영역
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item")

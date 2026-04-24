@@ -2,6 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Input/Reply.h"
+#include "Input/Events.h"
+#include "Layout/Geometry.h"
 #include "PZInventorySlotWidget.generated.h"
 
 class UImage;
@@ -34,6 +37,8 @@ protected:
 
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
 	TObjectPtr<UTextBlock> ItemWeight;
+
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory UI")
 	void UseItem();
