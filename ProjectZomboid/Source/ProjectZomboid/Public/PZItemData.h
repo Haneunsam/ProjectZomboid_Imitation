@@ -29,6 +29,16 @@ enum class EPZEquipmentSlot : uint8
 	Shoes UMETA(DisplayName = "Shoes (신발)")
 };
 
+// 무기 종류별 애니메이션 분류
+UENUM(BlueprintType)
+enum class EPZWeaponType : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Handgun UMETA(DisplayName = "Handgun (권총)"),
+	Rifle UMETA(DisplayName = "Rifle (소총)"),
+	Shotgun UMETA(DisplayName = "Shotgun (샷건)")
+};
+
 
 UCLASS(BlueprintType)
 class PROJECTZOMBOID_API UPZItemData : public UPrimaryDataAsset
@@ -62,4 +72,19 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Info")
 	EPZEquipmentSlot EquipSlot;
+
+	// 무기 종류 (애니메이션 분류용 - 무기가 아닌 아이템은 None)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Info")
+	EPZWeaponType WeaponType;
+
+	// 무기 장착 시 실제로 소환되어 캐릭터 손에 붙을 액터 클래스
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Info")
+	TSubclassOf<class APZWeaponActor> WeaponActorClass;
+
+	// 아이템 사용 시 효과 (음식 등)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Use Effect")
+	float HealthRestoreAmount;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Use Effect")
+	float StaminaRestoreAmount;
 };

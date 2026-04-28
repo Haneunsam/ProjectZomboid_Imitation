@@ -42,3 +42,15 @@ void UPZStatComponent::TakeDamage(float Amount)
 	CurrentHealth = FMath::Clamp(CurrentHealth - Amount, 0.0f, MaxHealth);
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 }
+
+void UPZStatComponent::Heal(float Amount)
+{
+	CurrentHealth = FMath::Clamp(CurrentHealth + Amount, 0.0f, MaxHealth);
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+}
+
+void UPZStatComponent::RestoreStamina(float Amount)
+{
+	CurrentStamina = FMath::Clamp(CurrentStamina + Amount, 0.0f, MaxStamina);
+	OnStaminaChanged.Broadcast(CurrentStamina, MaxStamina);
+}

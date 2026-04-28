@@ -18,6 +18,7 @@
 #include "PZEquipmentWidget.h"
 #include "PZContextMenuWidget.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "PZWeaponActor.h"
 
 APZCharacter::APZCharacter()
 {
@@ -60,10 +61,15 @@ APZCharacter::APZCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
 
-	// Primary Weapon Mesh 초기화
+	// Primary Weapon Mesh 초기화 (스태틱 메시용)
 	PrimaryWeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PrimaryWeaponMesh"));
-	PrimaryWeaponMesh->SetupAttachment(GetMesh(), TEXT("Hand_R")); // 기본적으로 오른손 소켓에 부착
-	PrimaryWeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 캐릭터와 충돌 방지
+	PrimaryWeaponMesh->SetupAttachment(GetMesh(), TEXT("Hand_R"));
+	PrimaryWeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Primary Weapon Skeletal Mesh 초기화 (총기 등 스켈레탈 메시용)
+	PrimaryWeaponSkeletalMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("PrimaryWeaponSkeletalMesh"));
+	PrimaryWeaponSkeletalMesh->SetupAttachment(GetMesh(), TEXT("Hand_R"));
+	PrimaryWeaponSkeletalMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// 의류 메시들 초기화 및 부착
 	TopMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("TopMesh"));
@@ -98,6 +104,7 @@ APZCharacter::APZCharacter()
 	// 캐릭터 본체 + 장비 메시들을 렌더 대상에 추가
 	EquipmentCaptureComponent->ShowOnlyComponents.Add(GetMesh());
 	EquipmentCaptureComponent->ShowOnlyComponents.Add(PrimaryWeaponMesh);
+	EquipmentCaptureComponent->ShowOnlyComponents.Add(PrimaryWeaponSkeletalMesh);
 	EquipmentCaptureComponent->ShowOnlyComponents.Add(TopMesh);
 	EquipmentCaptureComponent->ShowOnlyComponents.Add(BottomMesh);
 	EquipmentCaptureComponent->ShowOnlyComponents.Add(ShoesMesh);
@@ -462,26 +469,50 @@ void APZCharacter::EquipItem(UPZItemData* Item)
 	EquippedItems.Add(Item->EquipSlot, Item);
 	
 	// 3. 외형(Mesh) 업데이트
-	if (Item->EquipSlot == EPZEquipmentSlot::Primary && PrimaryWeaponMesh)
+	if (Item->EquipSlot == EPZEquipmentSlot::Primary || Item->EquipSlot == EPZEquipmentSlot::Secondary)
 	{
-		PrimaryWeaponMesh->SetStaticMesh(Item->ItemMesh);
+		// 기존 무기 액터가 있다면 파괴
+		if (CurrentWeaponActor)
+		{
+			CurrentWeaponActor->Destroy();
+			CurrentWeaponActor = nullptr;
+		}
+
+		// 새로운 무기 액터 소환
+		if (Item->WeaponActorClass)
+		{
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.Owner = this;
+			SpawnParams.Instigator = GetInstigator();
+
+			CurrentWeaponActor = GetWorld()->SpawnActor<APZWeaponActor>(Item->WeaponActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+			if (CurrentWeaponActor)
+			{
+				// 손(Hand_R) 소켓에 부착 (블루프린트에 설정된 오프셋이 유지됨)
+				CurrentWeaponActor->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, TEXT("Hand_R"));
+			}
+		}
+		
+		// 기존 직접 부착 방식은 비움 (중복 방지)
+		if (PrimaryWeaponSkeletalMesh) PrimaryWeaponSkeletalMesh->SetSkeletalMeshAsset(nullptr);
+		if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
 	}
 	else if (Item->ItemSkeletalMesh) // 의류(Skeletal Mesh) 장착
 	{
 		USkeletalMeshComponent* TargetComp = nullptr;
 		switch (Item->EquipSlot)
 		{
-		case EPZEquipmentSlot::Top: TargetComp = TopMesh; break;
+		case EPZEquipmentSlot::Top:    TargetComp = TopMesh;    break;
 		case EPZEquipmentSlot::Bottom: TargetComp = BottomMesh; break;
-		case EPZEquipmentSlot::Shoes: TargetComp = ShoesMesh; break;
-		case EPZEquipmentSlot::Head: TargetComp = HeadMesh; break;
-		case EPZEquipmentSlot::Back: TargetComp = BackMesh; break;
+		case EPZEquipmentSlot::Shoes:  TargetComp = ShoesMesh;  break;
+		case EPZEquipmentSlot::Head:   TargetComp = HeadMesh;   break;
+		case EPZEquipmentSlot::Back:   TargetComp = BackMesh;   break;
 		}
 
 		if (TargetComp)
 		{
 			TargetComp->SetSkeletalMeshAsset(Item->ItemSkeletalMesh);
-			TargetComp->SetLeaderPoseComponent(GetMesh()); // 애니메이션 동기화
+			TargetComp->SetLeaderPoseComponent(GetMesh());
 		}
 	}
 
@@ -500,7 +531,15 @@ void APZCharacter::EquipItem(UPZItemData* Item)
 	// 5. 장비창 렌더 갱신
 	if (EquipmentCaptureComponent)
 	{
+		UpdateEquipmentCapture();
 		EquipmentCaptureComponent->CaptureScene();
+	}
+
+	// 6. 무기 상태 업데이트 (애니메이션용)
+	if (Item->EquipSlot == EPZEquipmentSlot::Primary || Item->EquipSlot == EPZEquipmentSlot::Secondary)
+	{
+		bIsHoldingWeapon = true;
+		CurrentWeaponType = Item->WeaponType;
 	}
 }
 
@@ -511,9 +550,18 @@ void APZCharacter::UnequipItem(EPZEquipmentSlot Slot)
 		EquippedItems.Remove(Slot);
 
 		// 외형 제거
-		if (Slot == EPZEquipmentSlot::Primary && PrimaryWeaponMesh)
+		if (Slot == EPZEquipmentSlot::Primary || Slot == EPZEquipmentSlot::Secondary)
 		{
-			PrimaryWeaponMesh->SetStaticMesh(nullptr);
+			// 무기 액터 파괴
+			if (CurrentWeaponActor)
+			{
+				CurrentWeaponActor->Destroy();
+				CurrentWeaponActor = nullptr;
+			}
+
+			// 기존 컴포넌트들도 비움
+			if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
+			if (PrimaryWeaponSkeletalMesh) PrimaryWeaponSkeletalMesh->SetSkeletalMeshAsset(nullptr);
 		}
 		else // 의류 제거
 		{
@@ -548,7 +596,22 @@ void APZCharacter::UnequipItem(EPZEquipmentSlot Slot)
 		// 장비창 렌더 갱신
 		if (EquipmentCaptureComponent)
 		{
+			UpdateEquipmentCapture();
 			EquipmentCaptureComponent->CaptureScene();
+		}
+
+		// 무기 상태 업데이트 (애니메이션용)
+		if (Slot == EPZEquipmentSlot::Primary || Slot == EPZEquipmentSlot::Secondary)
+		{
+			// 다른 슬롯에도 무기가 있는지 확인
+			UPZItemData* OtherWeapon = nullptr;
+			if (Slot == EPZEquipmentSlot::Primary && EquippedItems.Contains(EPZEquipmentSlot::Secondary))
+				OtherWeapon = EquippedItems[EPZEquipmentSlot::Secondary];
+			if (Slot == EPZEquipmentSlot::Secondary && EquippedItems.Contains(EPZEquipmentSlot::Primary))
+				OtherWeapon = EquippedItems[EPZEquipmentSlot::Primary];
+
+			bIsHoldingWeapon = (OtherWeapon != nullptr);
+			CurrentWeaponType = OtherWeapon ? OtherWeapon->WeaponType : EPZWeaponType::None;
 		}
 	}
 }
@@ -558,13 +621,19 @@ void APZCharacter::DropItem(UPZItemData* Item)
 	if (!Item || !InventoryComponent) return;
 
 	// 1. 장착 중인 아이템이라면 먼저 장착 해제
-	for (auto& Elem : EquippedItems)
+	// 순회 중 컨테이너 수정을 피하기 위해 키를 먼저 찾고 루프 밖에서 해제
+	EPZEquipmentSlot SlotToUnequip = EPZEquipmentSlot::None;
+	for (const auto& Elem : EquippedItems)
 	{
 		if (Elem.Value == Item)
 		{
-			UnequipItem(Elem.Key);
+			SlotToUnequip = Elem.Key;
 			break;
 		}
+	}
+	if (SlotToUnequip != EPZEquipmentSlot::None)
+	{
+		UnequipItem(SlotToUnequip);
 	}
 
 	// 2. ItemActorClass 확인
@@ -612,5 +681,79 @@ void APZCharacter::DropItem(UPZItemData* Item)
 	{
 		EquipmentWidget->RefreshEquipment(this);
 	}
+}
+
+void APZCharacter::UseItem(UPZItemData* Item)
+{
+	if (!Item || !StatComponent || !InventoryComponent) return;
+
+	if (Item->ItemType == EPZItemType::Food || Item->ItemType == EPZItemType::Consumable)
+	{
+		// 1. RemoveItem 전에 필요한 정보를 미리 보관 (GC 안전)
+		const float HealAmount = Item->HealthRestoreAmount;
+		const float StaminaAmount = Item->StaminaRestoreAmount;
+		const FString UsedItemName = Item->ItemName.ToString();
+
+		// 2. 수치 회복
+		StatComponent->Heal(HealAmount);
+		StatComponent->RestoreStamina(StaminaAmount);
+
+		// 3. 인벤토리에서 소모
+		InventoryComponent->RemoveItem(Item);
+
+		// 4. UI 갱신
+		if (InventoryWidget)
+		{
+			InventoryWidget->RefreshInventory();
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("Used Item: %s. Restored Health: %f, Stamina: %f"), 
+			*UsedItemName, HealAmount, StaminaAmount);
+	}
+}
+
+void APZCharacter::UpdateEquipmentCapture()
+{
+	if (!EquipmentCaptureComponent) return;
+
+	// 기존 목록 비우기 (TArray이므로 Empty() 사용)
+	EquipmentCaptureComponent->ShowOnlyComponents.Empty();
+
+	// 1. 캐릭터 본체 추가
+	EquipmentCaptureComponent->ShowOnlyComponents.Add(GetMesh());
+
+	// 2. 장착된 모든 메시 추가
+	if (PrimaryWeaponMesh && PrimaryWeaponMesh->GetStaticMesh())
+		EquipmentCaptureComponent->ShowOnlyComponents.Add(PrimaryWeaponMesh);
+
+	if (PrimaryWeaponSkeletalMesh && PrimaryWeaponSkeletalMesh->GetSkeletalMeshAsset())
+		EquipmentCaptureComponent->ShowOnlyComponents.Add(PrimaryWeaponSkeletalMesh);
+
+	// 3. 무기 액터가 있다면 해당 액터의 메시들도 추가
+	if (CurrentWeaponActor)
+	{
+		if (CurrentWeaponActor->GetSkeletalMesh())
+			EquipmentCaptureComponent->ShowOnlyComponents.Add(CurrentWeaponActor->GetSkeletalMesh());
+		if (CurrentWeaponActor->GetStaticMesh())
+			EquipmentCaptureComponent->ShowOnlyComponents.Add(CurrentWeaponActor->GetStaticMesh());
+	}
+
+	if (TopMesh && TopMesh->GetSkeletalMeshAsset())
+		EquipmentCaptureComponent->ShowOnlyComponents.Add(TopMesh);
+
+	if (BottomMesh && BottomMesh->GetSkeletalMeshAsset())
+		EquipmentCaptureComponent->ShowOnlyComponents.Add(BottomMesh);
+
+	if (ShoesMesh && ShoesMesh->GetSkeletalMeshAsset())
+		EquipmentCaptureComponent->ShowOnlyComponents.Add(ShoesMesh);
+
+	if (HeadMesh && HeadMesh->GetSkeletalMeshAsset())
+		EquipmentCaptureComponent->ShowOnlyComponents.Add(HeadMesh);
+
+	if (BackMesh && BackMesh->GetSkeletalMeshAsset())
+		EquipmentCaptureComponent->ShowOnlyComponents.Add(BackMesh);
+
+	// 태그 부여 (필요 시 액터 필터링용)
+	Tags.AddUnique(TEXT("PreviewVisible"));
 }
 

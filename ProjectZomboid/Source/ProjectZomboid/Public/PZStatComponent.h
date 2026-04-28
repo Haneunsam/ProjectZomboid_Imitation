@@ -45,5 +45,7 @@ public:
 
 	void ReduceStamina(float Amount);
 	void RecoverStamina(float DeltaTime);
+	void RestoreStamina(float Amount);
 	void TakeDamage(float Amount);
+	void Heal(float Amount);
 };

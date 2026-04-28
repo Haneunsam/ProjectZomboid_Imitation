@@ -25,10 +25,12 @@ void UPZContextMenuWidget::InitMenu_Implementation(UPZItemData* InItemData, bool
 void UPZContextMenuWidget::OnUseClicked()
 {
 	if (!ItemData) return;
-	
-	// 여기에 아이템 타입에 따른 사용 로직 추가 (체력 회복, 탄창 장전 등)
-	UE_LOG(LogTemp, Warning, TEXT("Using Item: %s (Type logic to be added)"), *ItemData->ItemName.ToString());
-	
+
+	if (APZCharacter* Character = Cast<APZCharacter>(GetOwningPlayerPawn()))
+	{
+		Character->UseItem(ItemData);
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("UseItem Function Called!"));
+	}
 	RemoveFromParent();
 }
 

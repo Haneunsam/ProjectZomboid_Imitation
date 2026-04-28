@@ -130,6 +130,22 @@ public:
 	UPROPERTY()
 	class UPZContextMenuWidget* ActiveContextMenu;
 
+	// 무기를 들고 있는지 여부 (애니메이션 전환용)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	bool bIsHoldingWeapon = false;
+
+	// 현재 장착 중인 무기의 종류 (ABP에서 애니메이션 세트 전환에 사용)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	EPZWeaponType CurrentWeaponType = EPZWeaponType::None;
+
+	// 현재 캐릭터가 들고 있는 무기 액터 (블루프린트로 설정된 개별 오프셋 적용용)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	TObjectPtr<class APZWeaponActor> CurrentWeaponActor;
+
+	// 아이템 사용 (음식 먹기 등)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	void UseItem(UPZItemData* Item);
+
 	// 아이템 버리기
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void DropItem(UPZItemData* Item);
@@ -138,9 +154,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
 	TMap<EPZEquipmentSlot, TObjectPtr<UPZItemData>> EquippedItems;
 
-	// 주무기 장착 시 외형을 보여줄 컴포넌트
+	// 주무기 장착 시 외형을 보여줄 컴포넌트 (스태틱 메시용)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
 	TObjectPtr<UStaticMeshComponent> PrimaryWeaponMesh;
+
+	// 주무기 장착 시 외형을 보여줄 컴포넌트 (스켈레탈 메시용 - 총기 등)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
+	TObjectPtr<USkeletalMeshComponent> PrimaryWeaponSkeletalMesh;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
 	TObjectPtr<USkeletalMeshComponent> TopMesh;
@@ -156,6 +176,10 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Equipment")
 	TObjectPtr<USkeletalMeshComponent> BackMesh;
+
+	// 장비창 카메라용 Show Only 목록 갱신 (내부 전용)
+private:
+	void UpdateEquipmentCapture();
 
 protected:
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
