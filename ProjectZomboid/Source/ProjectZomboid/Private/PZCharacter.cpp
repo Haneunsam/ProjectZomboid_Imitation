@@ -201,6 +201,8 @@ void APZCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &APZCharacter::Move);
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &APZCharacter::StartSprint);
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &APZCharacter::StopSprint);
+		EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Started, this, &APZCharacter::StartAiming);
+		EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Completed, this, &APZCharacter::StopAiming);
 		EnhancedInputComponent->BindAction(InventoryAction, ETriggerEvent::Started, this, &APZCharacter::ToggleInventory);
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &APZCharacter::Interact);
 	}
@@ -239,17 +241,44 @@ void APZCharacter::Move(const FInputActionValue& Value)
 
 void APZCharacter::StartSprint()
 {
+	// 조준 중에는 달릴 수 없거나, 달리면 조준이 풀림
+	if (bIsAiming)
+	{
+		StopAiming();
+	}
+
 	if (StatComponent && StatComponent->CurrentStamina > 0.0f)
 	{
 		bIsSprinting = true;
-		GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+		UpdateMovementSpeed(); // 전용 함수로 통합 관리
 	}
 }
 
 void APZCharacter::StopSprint()
 {
 	bIsSprinting = false;
-	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	UpdateMovementSpeed();
+}
+
+void APZCharacter::StartAiming()
+{
+	// 무기를 들고 있을 때만 조준 가능
+	if (!bIsHoldingWeapon) return;
+
+	// 전력질주 중이면 중단
+	if (bIsSprinting)
+	{
+		StopSprint();
+	}
+
+	bIsAiming = true;
+	UpdateMovementSpeed();
+}
+
+void APZCharacter::StopAiming()
+{
+	bIsAiming = false;
+	UpdateMovementSpeed();
 }
 
 void APZCharacter::ToggleInventory()
@@ -366,11 +395,24 @@ void APZCharacter::UpdateMovementSpeed()
 		SpeedMultiplier = FMath::Clamp(1.0f - (ExcessRatio * 0.8f), 0.2f, 1.0f);
 	}
 
-	WalkSpeed = BaseWalkSpeed * SpeedMultiplier;
-	SprintSpeed = BaseSprintSpeed * SpeedMultiplier;
+	// 기본 속도 결정 (조준 > 질주 > 걷기 순서로 우선순위)
+	float TargetBaseSpeed = WalkSpeed;
+	
+	if (bIsAiming)
+	{
+		TargetBaseSpeed = AimWalkSpeed;
+	}
+	else if (bIsSprinting)
+	{
+		TargetBaseSpeed = SprintSpeed;
+	}
+	else
+	{
+		TargetBaseSpeed = BaseWalkSpeed;
+	}
 
-	// 현재 이동 모드에 따라 즉시 속도 적용
-	GetCharacterMovement()->MaxWalkSpeed = bIsSprinting ? SprintSpeed : WalkSpeed;
+	// 무게에 따른 최종 속도 계산
+	GetCharacterMovement()->MaxWalkSpeed = TargetBaseSpeed * SpeedMultiplier;
 
 	// 화면에 직접 출력 (디버깅용)
 	if (GEngine)

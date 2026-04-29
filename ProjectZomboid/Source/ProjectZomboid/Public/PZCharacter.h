@@ -46,10 +46,13 @@ protected:
 	UInputAction* MoveAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	UInputAction* LookAction; // For rotation if needed, but we'll use mouse cursor
+	UInputAction* LookAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* SprintAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* AimAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* InventoryAction;
@@ -70,6 +73,9 @@ protected:
 	UPROPERTY()
 	UPZInventoryWidget* InventoryWidget;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InteractAction;
+
 	/** Movement Properties */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float WalkSpeed = 300.0f;
@@ -78,10 +84,10 @@ protected:
 	float SprintSpeed = 600.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
-	float SprintStaminaCost = 10.0f;
+	float AimWalkSpeed = 150.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	UInputAction* InteractAction;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float SprintStaminaCost = 10.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TSubclassOf<class APZItemActor> ItemActorClass;
@@ -99,6 +105,9 @@ protected:
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ToggleEquipment();
+
+	void StartAiming();
+	void StopAiming();
 
 	UFUNCTION()
 	void UpdateMovementSpeed();
@@ -141,6 +150,10 @@ public:
 	// 현재 캐릭터가 들고 있는 무기 액터 (블루프린트로 설정된 개별 오프셋 적용용)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	TObjectPtr<class APZWeaponActor> CurrentWeaponActor;
+
+	// 조준 중인지 여부
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	bool bIsAiming = false;
 
 	// 아이템 사용 (음식 먹기 등)
 	UFUNCTION(BlueprintCallable, Category = "Inventory")

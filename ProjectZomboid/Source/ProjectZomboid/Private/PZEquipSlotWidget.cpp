@@ -106,7 +106,7 @@ FReply UPZEquipSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, 
 			{
 				if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("ContextMenuClass NOT ASSIGNED!"));
 			}
-		}
+		}	
 		else
 		{
 			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("Equip Slot: Character Cast FAILED!"));
