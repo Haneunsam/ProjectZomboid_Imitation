@@ -81,6 +81,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Info")
 	TSubclassOf<class APZWeaponActor> WeaponActorClass;
 
+	// 공격(사격/스윙) 애니메이션 몽타주
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Animation")
+	TObjectPtr<class UAnimMontage> AttackMontage;
+
+	// 장전 애니메이션 몽타주
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Animation")
+	TObjectPtr<class UAnimMontage> ReloadMontage;
+
+	// 언리얼 5 애니메이션 레이어 (대기/걷기 등 상태별 모션 교체용)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Animation")
+	TSubclassOf<class UAnimInstance> WeaponAnimLayer;
+
 	// 아이템 사용 시 효과 (음식 등)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Use Effect")
 	float HealthRestoreAmount;

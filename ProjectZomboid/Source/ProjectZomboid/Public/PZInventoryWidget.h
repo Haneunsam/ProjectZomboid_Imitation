@@ -28,6 +28,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	// 블루프린트 위젯과 바인딩 (이름이 일치해야 함)
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))

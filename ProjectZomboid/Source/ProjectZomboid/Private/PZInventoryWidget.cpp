@@ -8,6 +8,7 @@
 #include "PZCharacter.h"
 #include "PZEquipSlotWidget.h"
 #include "PZEquipmentWidget.h"
+#include "PZContextMenuWidget.h"
 
 void UPZInventoryWidget::NativeConstruct()
 {
@@ -17,6 +18,22 @@ void UPZInventoryWidget::NativeConstruct()
 	if (!WeightBar) UE_LOG(LogTemp, Error, TEXT("WeightBar is NOT BOUND! Check widget name in BP."));
 	if (!WeightText) UE_LOG(LogTemp, Error, TEXT("WeightText is NOT BOUND! Check widget name in BP."));
 	if (!ItemContainer) UE_LOG(LogTemp, Error, TEXT("ItemContainer is NOT BOUND! Check widget name in BP."));
+}
+ 
+FReply UPZInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	// 인벤토리 배경 클릭 시 열려있는 컨텍스트 메뉴 닫기
+	if (APZCharacter* Character = Cast<APZCharacter>(GetOwningPlayerPawn()))
+	{
+		// 컨텍스트 메뉴가 화면에 나와 있을 때만 닫기
+		if (Character->ActiveContextMenu && Character->ActiveContextMenu->IsInViewport())
+		{
+			Character->ActiveContextMenu->RemoveFromParent();
+			Character->ActiveContextMenu = nullptr;
+		}
+	}
+
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
 void UPZInventoryWidget::SetInventoryComponent(UPZInventoryComponent* NewComponent)

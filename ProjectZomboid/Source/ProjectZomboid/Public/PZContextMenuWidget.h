@@ -35,7 +35,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
-	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Context Menu")
 	TObjectPtr<UPZItemData> ItemData;

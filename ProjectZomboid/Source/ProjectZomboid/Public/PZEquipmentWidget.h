@@ -21,6 +21,8 @@ public:
 	void RefreshEquipment(APZCharacter* Character);
 
 protected:
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+
 	/** Equipment Slots */
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
 	TObjectPtr<UPZEquipSlotWidget> Slot_Primary;

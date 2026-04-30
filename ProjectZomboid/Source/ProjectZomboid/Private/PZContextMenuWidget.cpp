@@ -9,11 +9,13 @@ void UPZContextMenuWidget::NativeConstruct()
 	SetIsFocusable(true);
 }
 
-void UPZContextMenuWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
+FReply UPZContextMenuWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	Super::NativeOnMouseLeave(InMouseEvent);
-	// 마우스가 메뉴 밖으로 나가면 메뉴를 닫습니다. (원작 느낌)
-	// RemoveFromParent();
+	// 메뉴 영역 자체를 클릭했을 때 아래로 클릭이 전달되지 않도록 막음
+	// (이 코드가 있으면 메뉴 내부 버튼 클릭 시에도 Handled가 반환되어 버튼이 안 눌릴 수 있으므로, 
+	// 버튼이 없는 빈 공간 클릭 시에만 작동하도록 하거나, 일단 Unhandled를 반환하게 수정할 수 있습니다.)
+	// 하지만 보통 UMG 버튼은 이 이벤트보다 먼저 이벤트를 가로채므로 Handled도 괜찮습니다.
+	return FReply::Handled();
 }
 
 void UPZContextMenuWidget::InitMenu_Implementation(UPZItemData* InItemData, bool bIsEquipped)
@@ -30,6 +32,7 @@ void UPZContextMenuWidget::OnUseClicked()
 	{
 		Character->UseItem(ItemData);
 		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("UseItem Function Called!"));
+		Character->ActiveContextMenu = nullptr;
 	}
 	RemoveFromParent();
 }
@@ -47,6 +50,7 @@ void UPZContextMenuWidget::OnEquipClicked()
 	{
 		Character->EquipItem(ItemData);
 		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("EquipItem Function Called!"));
+		Character->ActiveContextMenu = nullptr;
 	}
 	else
 	{
@@ -64,6 +68,7 @@ void UPZContextMenuWidget::OnUnequipClicked()
 	{
 		Character->UnequipItem(ItemData->EquipSlot);
 		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("UnequipItem Function Called!"));
+		Character->ActiveContextMenu = nullptr;
 	}
 	RemoveFromParent();
 }
@@ -77,6 +82,7 @@ void UPZContextMenuWidget::OnDropClicked()
 	{
 		Character->DropItem(ItemData);
 		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("DropItem Function Called!"));
+		Character->ActiveContextMenu = nullptr;
 	}
 	RemoveFromParent();
 }

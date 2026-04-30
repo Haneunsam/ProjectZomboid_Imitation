@@ -5,6 +5,7 @@
 #include "PZCharacter.h"
 #include "PZContextMenuWidget.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "InputCoreTypes.h"
 
 void UPZEquipSlotWidget::UpdateSlot(UPZItemData* InItemData, EPZEquipmentSlot InSlotType)
@@ -87,13 +88,12 @@ FReply UPZEquipSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, 
 					Menu->SetVisibility(ESlateVisibility::Visible);
 					Menu->AddToViewport(9999);
 
-					APlayerController* PC = GetOwningPlayer();
-					if (PC)
-					{
-						FVector2D MousePos;
-						PC->GetMousePosition(MousePos.X, MousePos.Y);
-						Menu->SetPositionInViewport(MousePos, false);
-					}
+					// 마우스 우클릭한 위치로 메뉴 이동
+					FVector2D MousePos = UWidgetLayoutLibrary::GetMousePositionOnViewport(GetWorld());
+					Menu->SetPositionInViewport(MousePos, false);
+
+					// 포커스 강제 이동 (다른 곳 클릭 시 닫히게 함)
+					Menu->SetKeyboardFocus();
 
 					Character->ActiveContextMenu = Menu;
 				}

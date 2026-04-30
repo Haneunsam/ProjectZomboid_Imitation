@@ -19,6 +19,7 @@
 #include "PZContextMenuWidget.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "PZWeaponActor.h"
+#include "Engine/OverlapResult.h"
 
 APZCharacter::APZCharacter()
 {
@@ -33,6 +34,7 @@ APZCharacter::APZCharacter()
 	GetCharacterMovement()->bOrientRotationToMovement = false; // We want to look at mouse, not movement dir
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true; // 쭈그리기 기능 활성화
 
 	// Create Stat Component
 	StatComponent = CreateDefaultSubobject<UPZStatComponent>(TEXT("StatComponent"));
@@ -205,6 +207,8 @@ void APZCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Completed, this, &APZCharacter::StopAiming);
 		EnhancedInputComponent->BindAction(InventoryAction, ETriggerEvent::Started, this, &APZCharacter::ToggleInventory);
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &APZCharacter::Interact);
+		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &APZCharacter::StartCrouching);
+		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Completed, this, &APZCharacter::StopCrouching);
 	}
 }
 
@@ -262,6 +266,13 @@ void APZCharacter::StopSprint()
 
 void APZCharacter::StartAiming()
 {
+	// 컨텍스트 메뉴가 화면에 나와 있을 때만 닫기
+	if (ActiveContextMenu && ActiveContextMenu->IsInViewport())
+	{
+		ActiveContextMenu->RemoveFromParent();
+		ActiveContextMenu = nullptr;
+	}
+
 	// 무기를 들고 있을 때만 조준 가능
 	if (!bIsHoldingWeapon) return;
 
@@ -279,6 +290,16 @@ void APZCharacter::StopAiming()
 {
 	bIsAiming = false;
 	UpdateMovementSpeed();
+}
+
+void APZCharacter::StartCrouching()
+{
+	Crouch();
+}
+
+void APZCharacter::StopCrouching()
+{
+	UnCrouch();
 }
 
 void APZCharacter::ToggleInventory()
@@ -449,6 +470,13 @@ void APZCharacter::LookAtMouseCursor()
 
 void APZCharacter::Interact()
 {
+	// 컨텍스트 메뉴가 화면에 나와 있을 때만 닫기
+	if (ActiveContextMenu && ActiveContextMenu->IsInViewport())
+	{
+		ActiveContextMenu->RemoveFromParent();
+		ActiveContextMenu = nullptr;
+	}
+
 	// 키가 눌리는지
 	//UE_LOG(LogTemp, Warning, TEXT("Interact Key Pressed!"));
 
@@ -527,17 +555,43 @@ void APZCharacter::EquipItem(UPZItemData* Item)
 			SpawnParams.Owner = this;
 			SpawnParams.Instigator = GetInstigator();
 
-			CurrentWeaponActor = GetWorld()->SpawnActor<APZWeaponActor>(Item->WeaponActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+			FVector SpawnLocation = FVector::ZeroVector;
+			FRotator SpawnRotation = FRotator::ZeroRotator;
+
+			if (PrimaryWeaponSkeletalMesh)
+			{
+				SpawnLocation = PrimaryWeaponSkeletalMesh->GetComponentLocation();
+				SpawnRotation = PrimaryWeaponSkeletalMesh->GetComponentRotation();
+			}
+
+			CurrentWeaponActor = GetWorld()->SpawnActor<APZWeaponActor>(Item->WeaponActorClass, SpawnLocation, SpawnRotation, SpawnParams);
 			if (CurrentWeaponActor)
 			{
 				// 손(Hand_R) 소켓에 부착 (블루프린트에 설정된 오프셋이 유지됨)
 				CurrentWeaponActor->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, TEXT("Hand_R"));
 			}
+			
+			// 액터 소환 방식일 때는 기존 직접 부착 방식은 비움 (중복 방지)
+			if (PrimaryWeaponSkeletalMesh) PrimaryWeaponSkeletalMesh->SetSkeletalMeshAsset(nullptr);
+			if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
 		}
-		
-		// 기존 직접 부착 방식은 비움 (중복 방지)
-		if (PrimaryWeaponSkeletalMesh) PrimaryWeaponSkeletalMesh->SetSkeletalMeshAsset(nullptr);
-		if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
+		else
+		{
+			// 액터가 없을 경우: 스켈레탈 메시로 들어가게 수정
+			if (PrimaryWeaponSkeletalMesh)
+			{
+				PrimaryWeaponSkeletalMesh->SetSkeletalMeshAsset(Item->ItemSkeletalMesh);
+			}
+
+			// 스태틱 메시는 기능 부여하지 말고 남겨만 둠
+			/*
+			if (PrimaryWeaponMesh)
+			{
+				PrimaryWeaponMesh->SetStaticMesh(Item->ItemMesh);
+			}
+			*/
+			if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
+		}
 	}
 	else if (Item->ItemSkeletalMesh) // 의류(Skeletal Mesh) 장착
 	{
@@ -582,6 +636,13 @@ void APZCharacter::EquipItem(UPZItemData* Item)
 	{
 		bIsHoldingWeapon = true;
 		CurrentWeaponType = Item->WeaponType;
+		CurrentWeaponData = Item;
+
+		// 만약 무기 데이터에 AnimLayer가 있다면, 캐릭터 메시의 링크드 애님 인스턴스로 연결해주는 코드 예시
+		if (Item->WeaponAnimLayer)
+		{
+			GetMesh()->LinkAnimClassLayers(Item->WeaponAnimLayer);
+		}
 	}
 }
 
@@ -654,6 +715,17 @@ void APZCharacter::UnequipItem(EPZEquipmentSlot Slot)
 
 			bIsHoldingWeapon = (OtherWeapon != nullptr);
 			CurrentWeaponType = OtherWeapon ? OtherWeapon->WeaponType : EPZWeaponType::None;
+			CurrentWeaponData = OtherWeapon;
+
+			if (OtherWeapon && OtherWeapon->WeaponAnimLayer)
+			{
+				GetMesh()->LinkAnimClassLayers(OtherWeapon->WeaponAnimLayer);
+			}
+			else
+			{
+				// 해제 후 다른 무기가 없다면 연결된 애님 레이어 해제
+				GetMesh()->UnlinkAnimClassLayers(UAnimInstance::StaticClass());
+			}
 		}
 	}
 }

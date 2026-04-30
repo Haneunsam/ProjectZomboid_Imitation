@@ -1,6 +1,7 @@
 #include "PZEquipmentWidget.h"
 #include "PZEquipSlotWidget.h"
 #include "PZCharacter.h"
+#include "PZContextMenuWidget.h"
 
 void UPZEquipmentWidget::RefreshEquipment(APZCharacter* Character)
 {
@@ -48,4 +49,20 @@ void UPZEquipmentWidget::RefreshEquipment(APZCharacter* Character)
 		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Shoes);
 		Slot_Shoes->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Shoes);
 	}
+}
+
+FReply UPZEquipmentWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	// 장비창 배경 클릭 시 열려있는 컨텍스트 메뉴 닫기
+	if (APZCharacter* Character = Cast<APZCharacter>(GetOwningPlayerPawn()))
+	{
+		// 컨텍스트 메뉴가 화면에 나와 있을 때만 닫기
+		if (Character->ActiveContextMenu && Character->ActiveContextMenu->IsInViewport())
+		{
+			Character->ActiveContextMenu->RemoveFromParent();
+			Character->ActiveContextMenu = nullptr;
+		}
+	}
+
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }

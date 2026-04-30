@@ -57,6 +57,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* InventoryAction;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* CrouchAction;
+
 	/** Stats Component */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
 	UPZStatComponent* StatComponent;
@@ -109,6 +112,9 @@ protected:
 	void StartAiming();
 	void StopAiming();
 
+	void StartCrouching();
+	void StopCrouching();
+
 	UFUNCTION()
 	void UpdateMovementSpeed();
 
@@ -146,6 +152,10 @@ public:
 	// 현재 장착 중인 무기의 종류 (ABP에서 애니메이션 세트 전환에 사용)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	EPZWeaponType CurrentWeaponType = EPZWeaponType::None;
+
+	// 현재 장착 중인 무기의 데이터 (몽타주, 애님 레이어 등 접근용)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	TObjectPtr<UPZItemData> CurrentWeaponData;
 
 	// 현재 캐릭터가 들고 있는 무기 액터 (블루프린트로 설정된 개별 오프셋 적용용)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
