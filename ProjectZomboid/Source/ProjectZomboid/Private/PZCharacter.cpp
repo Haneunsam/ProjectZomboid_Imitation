@@ -435,15 +435,15 @@ void APZCharacter::UpdateMovementSpeed()
 	// 무게에 따른 최종 속도 계산
 	GetCharacterMovement()->MaxWalkSpeed = TargetBaseSpeed * SpeedMultiplier;
 
-	// 화면에 직접 출력 (디버깅용)
+#if WITH_EDITOR
+	// 에디터 플레이 시에만 디버그 메시지 표시 (고정 ID로 덮어씌워 스팸 방지)
 	if (GEngine)
 	{
-		FString Msg = FString::Printf(TEXT("Weight: %.1f / Multiplier: %.2f -> WalkSpeed: %.1f"), 
-			CurrentWeight, SpeedMultiplier, WalkSpeed);
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, Msg);
+		FString Msg = FString::Printf(TEXT("[Weight] %.1fkg | Speed: %.0f (x%.2f)"),
+			CurrentWeight, GetCharacterMovement()->MaxWalkSpeed, SpeedMultiplier);
+		GEngine->AddOnScreenDebugMessage(10, 3.f, FColor::Cyan, Msg);
 	}
-
-	UE_LOG(LogTemp, Warning, TEXT("Weight: %f, Multiplier: %f"), CurrentWeight, SpeedMultiplier);
+#endif
 }
 
 void APZCharacter::LookAtMouseCursor()
@@ -538,10 +538,10 @@ void APZCharacter::EquipItem(UPZItemData* Item)
 	// 2. 새로운 아이템 등록
 	EquippedItems.Add(Item->EquipSlot, Item);
 	
-	// 3. 외형(Mesh) 업데이트
-	if (Item->EquipSlot == EPZEquipmentSlot::Primary || Item->EquipSlot == EPZEquipmentSlot::Secondary)
+	// 3. 외형(Mesh) 업데이트 - Primary 슬롯만 무기 액터를 소환/교체, Secondary는 건드리지 않음
+	if (Item->EquipSlot == EPZEquipmentSlot::Primary)
 	{
-		// 기존 무기 액터가 있다면 파괴
+		// Primary 슬롯 전용: 기존 Primary 무기 액터가 있다면 파괴 후 교체
 		if (CurrentWeaponActor)
 		{
 			CurrentWeaponActor->Destroy();
@@ -555,43 +555,31 @@ void APZCharacter::EquipItem(UPZItemData* Item)
 			SpawnParams.Owner = this;
 			SpawnParams.Instigator = GetInstigator();
 
-			FVector SpawnLocation = FVector::ZeroVector;
-			FRotator SpawnRotation = FRotator::ZeroRotator;
-
-			if (PrimaryWeaponSkeletalMesh)
-			{
-				SpawnLocation = PrimaryWeaponSkeletalMesh->GetComponentLocation();
-				SpawnRotation = PrimaryWeaponSkeletalMesh->GetComponentRotation();
-			}
-
-			CurrentWeaponActor = GetWorld()->SpawnActor<APZWeaponActor>(Item->WeaponActorClass, SpawnLocation, SpawnRotation, SpawnParams);
+			CurrentWeaponActor = GetWorld()->SpawnActor<APZWeaponActor>(
+				Item->WeaponActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 			if (CurrentWeaponActor)
 			{
-				// 손(Hand_R) 소켓에 부착 (블루프린트에 설정된 오프셋이 유지됨)
-				CurrentWeaponActor->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, TEXT("Hand_R"));
+				// KeepRelativeTransform: 블루프린트에서 설정한 자식 메시의 상대 오프셋/회전 유지
+				CurrentWeaponActor->AttachToComponent(GetMesh(),
+					FAttachmentTransformRules::SnapToTargetIncludingScale, TEXT("Hand_R"));
 			}
-			
-			// 액터 소환 방식일 때는 기존 직접 부착 방식은 비움 (중복 방지)
+
+			// 액터 소환 방식이므로 직접 부착 컴포넌트는 비움 (중복 방지)
 			if (PrimaryWeaponSkeletalMesh) PrimaryWeaponSkeletalMesh->SetSkeletalMeshAsset(nullptr);
 			if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
 		}
 		else
 		{
-			// 액터가 없을 경우: 스켈레탈 메시로 들어가게 수정
+			// WeaponActorClass 없을 때: 스켈레탈 메시 컴포넌트에 직접 할당
 			if (PrimaryWeaponSkeletalMesh)
-			{
 				PrimaryWeaponSkeletalMesh->SetSkeletalMeshAsset(Item->ItemSkeletalMesh);
-			}
-
-			// 스태틱 메시는 기능 부여하지 말고 남겨만 둠
-			/*
-			if (PrimaryWeaponMesh)
-			{
-				PrimaryWeaponMesh->SetStaticMesh(Item->ItemMesh);
-			}
-			*/
 			if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
 		}
+	}
+	else if (Item->EquipSlot == EPZEquipmentSlot::Secondary)
+	{
+		// Secondary 슬롯: 현재는 별도 액터 슬롯 없이 시각적 표시만 (확장 가능)
+		// Primary 무기 액터는 절대 건드리지 않음
 	}
 	else if (Item->ItemSkeletalMesh) // 의류(Skeletal Mesh) 장착
 	{
@@ -631,18 +619,13 @@ void APZCharacter::EquipItem(UPZItemData* Item)
 		EquipmentCaptureComponent->CaptureScene();
 	}
 
-	// 6. 무기 상태 업데이트 (애니메이션용)
-	if (Item->EquipSlot == EPZEquipmentSlot::Primary || Item->EquipSlot == EPZEquipmentSlot::Secondary)
+	// 6. 무기 상태 업데이트 (애니메이션용) - Primary 슬롯 장착 시에만 현재 무기로 설정
+	if (Item->EquipSlot == EPZEquipmentSlot::Primary)
 	{
-		bIsHoldingWeapon = true;
+		// WeaponType이 None(비무기 아이템)이 아닐 때만 무기 소지로 판정
+		bIsHoldingWeapon = (Item->WeaponType != EPZWeaponType::None);
 		CurrentWeaponType = Item->WeaponType;
 		CurrentWeaponData = Item;
-
-		// 만약 무기 데이터에 AnimLayer가 있다면, 캐릭터 메시의 링크드 애님 인스턴스로 연결해주는 코드 예시
-		if (Item->WeaponAnimLayer)
-		{
-			GetMesh()->LinkAnimClassLayers(Item->WeaponAnimLayer);
-		}
 	}
 }
 
@@ -717,15 +700,7 @@ void APZCharacter::UnequipItem(EPZEquipmentSlot Slot)
 			CurrentWeaponType = OtherWeapon ? OtherWeapon->WeaponType : EPZWeaponType::None;
 			CurrentWeaponData = OtherWeapon;
 
-			if (OtherWeapon && OtherWeapon->WeaponAnimLayer)
-			{
-				GetMesh()->LinkAnimClassLayers(OtherWeapon->WeaponAnimLayer);
-			}
-			else
-			{
-				// 해제 후 다른 무기가 없다면 연결된 애님 레이어 해제
-				GetMesh()->UnlinkAnimClassLayers(UAnimInstance::StaticClass());
-			}
+			// 레이어 로직은 더 이상 사용하지 않고 Enum 시스템으로 처리
 		}
 	}
 }

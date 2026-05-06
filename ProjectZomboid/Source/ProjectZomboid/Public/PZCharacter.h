@@ -165,6 +165,18 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	bool bIsAiming = false;
 
+	// 맨손 잽 (기본 공격) 애니메이션 몽타주
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Unarmed")
+	TObjectPtr<class UAnimMontage> UnarmedJabMontage;
+
+	// 맨손 밀치기 (몬스터 근접 시) 애니메이션 몽타주
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Unarmed")
+	TObjectPtr<class UAnimMontage> UnarmedPushMontage;
+
+	// 맨손 발로 내려찍기 (쓰러진 적) 애니메이션 몽타주
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Unarmed")
+	TObjectPtr<class UAnimMontage> UnarmedStompMontage;
+
 	// 아이템 사용 (음식 먹기 등)
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void UseItem(UPZItemData* Item);

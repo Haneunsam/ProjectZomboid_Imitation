@@ -47,7 +47,7 @@ void UPZInventoryWidget::SetInventoryComponent(UPZInventoryComponent* NewCompone
 		InventoryComp->OnInventoryChanged.AddDynamic(this, &UPZInventoryWidget::RefreshInventory);
 		
 		RefreshInventory();
-	}
+	}	
 	else
 	{
 		UE_LOG(LogTemp, Error, TEXT("SetInventoryComponent called with NULL component!"));

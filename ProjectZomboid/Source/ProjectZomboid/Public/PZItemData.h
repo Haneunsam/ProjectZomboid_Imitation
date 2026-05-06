@@ -33,10 +33,11 @@ enum class EPZEquipmentSlot : uint8
 UENUM(BlueprintType)
 enum class EPZWeaponType : uint8
 {
-	None UMETA(DisplayName = "None"),
+	None UMETA(DisplayName = "None (맨손)"),
 	Handgun UMETA(DisplayName = "Handgun (권총)"),
 	Rifle UMETA(DisplayName = "Rifle (소총)"),
-	Shotgun UMETA(DisplayName = "Shotgun (샷건)")
+	Shotgun UMETA(DisplayName = "Shotgun (샷건)"),
+	Melee UMETA(DisplayName = "Melee (근접무기)")
 };
 
 
@@ -81,17 +82,33 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Info")
 	TSubclassOf<class APZWeaponActor> WeaponActorClass;
 
-	// 공격(사격/스윙) 애니메이션 몽타주
+	// 일반 공격(사격/스윙) 애니메이션 몽타주
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Animation")
 	TObjectPtr<class UAnimMontage> AttackMontage;
 
-	// 장전 애니메이션 몽타주
+	// 마지막 총알을 발사할 때의 몽타주 (Fire to Dry)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Animation")
+	TObjectPtr<class UAnimMontage> DryFireMontage;
+
+	// 일반 장전 애니메이션 몽타주 (총알이 남아있을 때)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Animation")
 	TObjectPtr<class UAnimMontage> ReloadMontage;
 
-	// 언리얼 5 애니메이션 레이어 (대기/걷기 등 상태별 모션 교체용)
+	// 빈 탄창에서 장전할 때의 애니메이션 몽타주 (Reload from Dry)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Animation")
-	TSubclassOf<class UAnimInstance> WeaponAnimLayer;
+	TObjectPtr<class UAnimMontage> DryReloadMontage;
+
+	// 약실에 탄을 넣거나 펌프 액션을 할 때의 몽타주 (Chamber Round / Pump)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Animation")
+	TObjectPtr<class UAnimMontage> ChamberRoundMontage;
+
+	// 격발 모드 설정 (단발/연발 등)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Settings")
+	bool bIsAutomaticFire = false;
+
+	// 격발 모드 변경 가능 여부 (소총 등은 true, 샷건/권총은 false)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Settings")
+	bool bCanChangeFireMode = false;
 
 	// 아이템 사용 시 효과 (음식 등)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Use Effect")
