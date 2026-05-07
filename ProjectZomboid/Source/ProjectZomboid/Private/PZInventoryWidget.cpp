@@ -132,9 +132,8 @@ void UPZInventoryWidget::RefreshInventory()
 	}
 
 	// 장비 슬롯 업데이트는 이제 PZEquipmentWidget에서 처리합니다.
-	APZCharacter* PZCharacter = Cast<APZCharacter>(GetOwningPlayerPawn());
-	if (PZCharacter && PZCharacter->EquipmentWidget)
+	if (Character && Character->EquipmentWidget)
 	{
-		PZCharacter->EquipmentWidget->RefreshEquipment(PZCharacter);
+		Character->EquipmentWidget->RefreshEquipment(Character);
 	}
 }

@@ -13,12 +13,6 @@ void UPZEquipmentWidget::RefreshEquipment(APZCharacter* Character)
 		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Primary);
 		Slot_Primary->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Primary);
 	}
-	// Secondary 슬롯
-	if (Slot_Secondary)
-	{
-		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Secondary);
-		Slot_Secondary->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Secondary);
-	}
 	// Back 슬롯
 	if (Slot_Back)
 	{

@@ -1,7 +1,6 @@
 #include "PZEquipSlotWidget.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
-#include "Components/TextBlock.h"
 #include "PZCharacter.h"
 #include "PZContextMenuWidget.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
@@ -37,7 +36,6 @@ FText UPZEquipSlotWidget::GetSlotDisplayName(EPZEquipmentSlot Slot)
 	switch (Slot)
 	{
 	case EPZEquipmentSlot::Primary:   return FText::FromString(TEXT("주 무기"));
-	case EPZEquipmentSlot::Secondary: return FText::FromString(TEXT("보조 무기"));
 	case EPZEquipmentSlot::Back:      return FText::FromString(TEXT("가방"));
 	case EPZEquipmentSlot::Head:      return FText::FromString(TEXT("머리"));
 	case EPZEquipmentSlot::Top:       return FText::FromString(TEXT("상의"));

@@ -28,9 +28,6 @@ protected:
 	TObjectPtr<UPZEquipSlotWidget> Slot_Primary;
 
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
-	TObjectPtr<UPZEquipSlotWidget> Slot_Secondary;
-
-	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
 	TObjectPtr<UPZEquipSlotWidget> Slot_Back;
 
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))

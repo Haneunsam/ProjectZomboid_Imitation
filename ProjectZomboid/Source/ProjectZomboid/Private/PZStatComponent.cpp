@@ -13,6 +13,10 @@ UPZStatComponent::UPZStatComponent()
 void UPZStatComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// BP에서 MaxHealth/MaxStamina를 수정한 경우 Current 값에 반영
+	CurrentHealth = MaxHealth;
+	CurrentStamina = MaxStamina;
 }
 
 void UPZStatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

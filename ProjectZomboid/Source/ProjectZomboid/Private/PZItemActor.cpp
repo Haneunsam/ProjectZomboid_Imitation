@@ -36,20 +36,25 @@ void APZItemActor::OnConstruction(const FTransform& Transform)
 
 void APZItemActor::UpdateMeshFromData()
 {
-	if (ItemData && MeshComponent)
-	{
-		if (ItemData->ItemMesh)
-		{
-			MeshComponent->SetStaticMesh(ItemData->ItemMesh);
+	if (!ItemData || !MeshComponent) return;
 
-			// 옷처럼 피벗이 캐릭터 원점 기준인 메시는 바운드 중심으로 자동 보정
-			if (ItemData->ItemSkeletalMesh)
-			{
-				FBoxSphereBounds Bounds = MeshComponent->CalcBounds(FTransform::Identity);
-				FVector Offset = -Bounds.Origin; // 바운드 중심을 원점으로 이동
-				MeshComponent->SetRelativeLocation(Offset);
-			}
+	if (ItemData->ItemMesh)
+	{
+		MeshComponent->SetStaticMesh(ItemData->ItemMesh);
+
+		// 옷처럼 피벗이 캐릭터 원점 기준인 메시는 바운드 중심으로 자동 보정
+		if (ItemData->ItemSkeletalMesh)
+		{
+			FBoxSphereBounds Bounds = MeshComponent->CalcBounds(FTransform::Identity);
+			FVector Offset = -Bounds.Origin;
+			MeshComponent->SetRelativeLocation(Offset);
 		}
+	}
+	else
+	{
+		// StaticMesh 없이 드롭되면 투명 액터가 스폰됨 — 데이터 확인 필요
+		UE_LOG(LogTemp, Warning, TEXT("[PZItemActor] ItemMesh(StaticMesh) is NULL. Item will be invisible when dropped. Check ItemData: %s"),
+			ItemData->ItemName.IsEmpty() ? TEXT("Unknown") : *ItemData->ItemName.ToString());
 	}
 }
 

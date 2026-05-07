@@ -7,6 +7,7 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "PZStatComponent.h"
 #include "Components/WidgetComponent.h"
 #include "PZInventoryComponent.h"
@@ -14,12 +15,17 @@
 #include "Blueprint/UserWidget.h"
 #include "PZItemActor.h"
 #include "PZItemData.h"
-#include "DrawDebugHelpers.h" // 범위를 보여주는 헤더
+#include "DrawDebugHelpers.h"
 #include "PZEquipmentWidget.h"
 #include "PZContextMenuWidget.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "PZWeaponActor.h"
 #include "Engine/OverlapResult.h"
+#include "PZBulletActor.h"
+#include "PZDamageInterface.h"
+#include "PZRangeDebugWidget.h"
+#include "PZHealthComponent.h"
+#include "PZZombieCharacter.h"
 
 APZCharacter::APZCharacter()
 {
@@ -38,6 +44,16 @@ APZCharacter::APZCharacter()
 
 	// Create Stat Component
 	StatComponent = CreateDefaultSubobject<UPZStatComponent>(TEXT("StatComponent"));
+
+	// Create Health Component (부위별 체력)
+	HealthComponent = CreateDefaultSubobject<UPZHealthComponent>(TEXT("HealthComponent"));
+	// 플레이어 기본값 (Tarkov 참고)
+	HealthComponent->bIsZombie       = false;
+	HealthComponent->HeadMaxHealth   = 35.0f;
+	HealthComponent->TorsoMaxHealth  = 85.0f;
+	HealthComponent->ArmMaxHealth    = 60.0f;
+	HealthComponent->LegMaxHealth    = 65.0f;
+	HealthComponent->TotalMaxHealth  = 200.0f;
 
 	// Create Stamina Widget Component
 	StaminaWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("StaminaWidget"));
@@ -194,6 +210,15 @@ void APZCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	LookAtMouseCursor();
+
+	// 부위 부상에 따른 이동속도 반영 (출혈 등으로 부위 체력이 변할 수 있음)
+	UpdateMovementSpeed();
+
+	// 디버그 사거리 매 프레임 갱신
+	if (bShowDebugRanges)
+	{
+		DrawDebugRanges();
+	}
 }
 
 void APZCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -209,6 +234,18 @@ void APZCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &APZCharacter::Interact);
 		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &APZCharacter::StartCrouching);
 		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Completed, this, &APZCharacter::StopCrouching);
+
+		// 사격 / 근접 공격 (좌클릭)
+		if (FireAction)
+		{
+			EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Started, this, &APZCharacter::FireWeapon);
+		}
+		// 장전 (R키) — 블루프린트에서 처리하는 경우 여기서 바인딩 생략 가능
+		// DebugRange 토글 (F1 등)
+		if (DebugRangeAction)
+		{
+			EnhancedInputComponent->BindAction(DebugRangeAction, ETriggerEvent::Started, this, &APZCharacter::ToggleDebugRanges);
+		}
 	}
 }
 
@@ -229,14 +266,13 @@ void APZCharacter::Move(const FInputActionValue& Value)
 		AddMovementInput(ForwardDirection, MovementVector.Y);	// W/S입력
 		AddMovementInput(RightDirection, MovementVector.X);		// A/D 입력
 
-		// 스테미나 로직
+		// 스테미나 로직: 스태미나 소진 or 멈춤 → 달리기 중단
 		if (bIsSprinting && (StatComponent->CurrentStamina <= 0.0f || GetVelocity().IsNearlyZero()))
 		{
 			StopSprint();
 		}
-
-		// 달리기 중지 로직
-		if (bIsSprinting && !GetVelocity().IsNearlyZero())
+		// 달리는 중에만 스태미나 소모 (StopSprint 후엔 bIsSprinting이 false이므로 실행 안 됨)
+		else if (bIsSprinting)
 		{
 			StatComponent->ReduceStamina(SprintStaminaCost * GetWorld()->GetDeltaSeconds());
 		}
@@ -432,8 +468,15 @@ void APZCharacter::UpdateMovementSpeed()
 		TargetBaseSpeed = BaseWalkSpeed;
 	}
 
-	// 무게에 따른 최종 속도 계산
-	GetCharacterMovement()->MaxWalkSpeed = TargetBaseSpeed * SpeedMultiplier;
+	// 다리 부상에 따른 추가 속도 감소
+	float LegMultiplier = 1.0f;
+	if (HealthComponent)
+	{
+		LegMultiplier = HealthComponent->GetMovementSpeedMultiplier();
+	}
+
+	// 무게 + 다리 부상 합산
+	GetCharacterMovement()->MaxWalkSpeed = TargetBaseSpeed * SpeedMultiplier * LegMultiplier;
 
 #if WITH_EDITOR
 	// 에디터 플레이 시에만 디버그 메시지 표시 (고정 ID로 덮어씌워 스팸 방지)
@@ -576,11 +619,6 @@ void APZCharacter::EquipItem(UPZItemData* Item)
 			if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
 		}
 	}
-	else if (Item->EquipSlot == EPZEquipmentSlot::Secondary)
-	{
-		// Secondary 슬롯: 현재는 별도 액터 슬롯 없이 시각적 표시만 (확장 가능)
-		// Primary 무기 액터는 절대 건드리지 않음
-	}
 	else if (Item->ItemSkeletalMesh) // 의류(Skeletal Mesh) 장착
 	{
 		USkeletalMeshComponent* TargetComp = nullptr;
@@ -636,16 +674,14 @@ void APZCharacter::UnequipItem(EPZEquipmentSlot Slot)
 		EquippedItems.Remove(Slot);
 
 		// 외형 제거
-		if (Slot == EPZEquipmentSlot::Primary || Slot == EPZEquipmentSlot::Secondary)
+		// Primary 슬롯 해제 시에만 무기 액터/메시 컴포넌트 파괴 (Secondary 해제 시 Primary 액터 보존)
+		if (Slot == EPZEquipmentSlot::Primary)
 		{
-			// 무기 액터 파괴
 			if (CurrentWeaponActor)
 			{
 				CurrentWeaponActor->Destroy();
 				CurrentWeaponActor = nullptr;
 			}
-
-			// 기존 컴포넌트들도 비움
 			if (PrimaryWeaponMesh) PrimaryWeaponMesh->SetStaticMesh(nullptr);
 			if (PrimaryWeaponSkeletalMesh) PrimaryWeaponSkeletalMesh->SetSkeletalMeshAsset(nullptr);
 		}
@@ -686,21 +722,12 @@ void APZCharacter::UnequipItem(EPZEquipmentSlot Slot)
 			EquipmentCaptureComponent->CaptureScene();
 		}
 
-		// 무기 상태 업데이트 (애니메이션용)
-		if (Slot == EPZEquipmentSlot::Primary || Slot == EPZEquipmentSlot::Secondary)
+		// Primary 해제 시 무기 상태 초기화
+		if (Slot == EPZEquipmentSlot::Primary)
 		{
-			// 다른 슬롯에도 무기가 있는지 확인
-			UPZItemData* OtherWeapon = nullptr;
-			if (Slot == EPZEquipmentSlot::Primary && EquippedItems.Contains(EPZEquipmentSlot::Secondary))
-				OtherWeapon = EquippedItems[EPZEquipmentSlot::Secondary];
-			if (Slot == EPZEquipmentSlot::Secondary && EquippedItems.Contains(EPZEquipmentSlot::Primary))
-				OtherWeapon = EquippedItems[EPZEquipmentSlot::Primary];
-
-			bIsHoldingWeapon = (OtherWeapon != nullptr);
-			CurrentWeaponType = OtherWeapon ? OtherWeapon->WeaponType : EPZWeaponType::None;
-			CurrentWeaponData = OtherWeapon;
-
-			// 레이어 로직은 더 이상 사용하지 않고 Enum 시스템으로 처리
+			bIsHoldingWeapon = false;
+			CurrentWeaponType = EPZWeaponType::None;
+			CurrentWeaponData = nullptr;
 		}
 	}
 }
@@ -846,3 +873,516 @@ void APZCharacter::UpdateEquipmentCapture()
 	Tags.AddUnique(TEXT("PreviewVisible"));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  전투 — 사격
+// ═══════════════════════════════════════════════════════════════════════════
+
+void APZCharacter::FireWeapon()
+{
+	// 무기를 들고 있지 않거나 탄약이 없으면 리턴
+	// (탄약 0 처리 / DryFire는 블루프린트에서 이벤트 그래프로 처리)
+	if (!CurrentWeaponData) return;
+	if (!BulletActorClass) return;
+
+	const EPZWeaponType WType = CurrentWeaponData->WeaponType;
+
+	// ── 총구 위치 결정 ──────────────────────────────────────────────────
+	// 캐릭터 앞·위 방향 오프셋으로 총구 위치 근사
+	const FVector MuzzleLocation =
+		GetActorLocation()
+		+ GetActorForwardVector() * 60.0f
+		+ FVector(0.0f, 0.0f, 80.0f);
+
+	const FVector FireDirection = GetActorForwardVector();
+
+	if (WType == EPZWeaponType::Shotgun)
+	{
+		// ── 샷건: 원뿔 내 랜덤 산탄 ──────────────────────────────────
+		const float HalfAngleDeg = bIsAiming
+			? CurrentWeaponData->ShotgunAimSpreadAngle
+			: CurrentWeaponData->ShotgunSpreadAngle;
+		const float HalfAngleRad = FMath::DegreesToRadians(HalfAngleDeg);
+
+		for (int32 i = 0; i < CurrentWeaponData->ShotgunPelletCount; ++i)
+		{
+			const FVector PelletDir = FMath::VRandCone(FireDirection, HalfAngleRad);
+			SpawnBullet(MuzzleLocation, PelletDir);
+		}
+	}
+	else if (WType == EPZWeaponType::Handgun
+		  || WType == EPZWeaponType::Rifle)
+	{
+		// ── 단발·연발 총기: 직선 한 발 + 마우스-머리 기반 헤드샷 ──────
+		const bool bForceHeadshot = TryComputeHeadshot();
+		SpawnBullet(MuzzleLocation, FireDirection, bForceHeadshot);
+	}
+	// Melee / None 은 MeleeAttack() 으로 처리
+}
+
+// ── 총알 스폰 헬퍼 ───────────────────────────────────────────────────────────
+void APZCharacter::SpawnBullet(const FVector& SpawnLocation, const FVector& Direction, bool bForceHeadshot) const
+{
+	if (!BulletActorClass || !CurrentWeaponData) return;
+
+	// ── 팔 부상에 따른 조준 흔들림 ──────────────────────────────────────
+	FVector FinalDirection = Direction;
+	if (HealthComponent && AimSwayMaxDeg > 0.0f)
+	{
+		const float SwayMul = HealthComponent->GetAimSwayMultiplier(); // 0~1
+		if (SwayMul > 0.0f)
+		{
+			const float HalfAngleRad = FMath::DegreesToRadians(AimSwayMaxDeg * SwayMul);
+			FinalDirection = FMath::VRandCone(Direction, HalfAngleRad);
+		}
+	}
+
+	FActorSpawnParameters Params;
+	Params.Owner      = GetOwner();
+	Params.Instigator = GetInstigator();
+	Params.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	APZBulletActor* Bullet = GetWorld()->SpawnActor<APZBulletActor>(
+		BulletActorClass, SpawnLocation, FinalDirection.Rotation(), Params);
+
+	if (Bullet)
+	{
+		Bullet->InitBullet(
+			FinalDirection,
+			CurrentWeaponData->BulletInitialSpeed,
+			CurrentWeaponData->MaxRange,
+			CurrentWeaponData->BaseDamage,
+			CurrentWeaponData->FalloffStartRange,
+			CurrentWeaponData->FalloffEndRange,
+			CurrentWeaponData->MinDamagePercent,
+			const_cast<APZCharacter*>(this),  // Shooter
+			bForceHeadshot
+		);
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  전투 — 근접 공격 (거리/상태별 자동 분기 디스패처)
+// ═══════════════════════════════════════════════════════════════════════════
+
+void APZCharacter::MeleeAttack()
+{
+	// 가장 가까운 좀비 1마리 탐색 (BasicMeleeRange 이내)
+	const FVector MyLoc = GetActorLocation();
+	const FVector Fwd   = GetActorForwardVector();
+
+	APZZombieCharacter* ClosestZombie = nullptr;
+	float ClosestDist = FLT_MAX;
+
+	TArray<FHitResult> Hits;
+	TArray<AActor*> Ignored;
+	Ignored.Add(this);
+
+	UKismetSystemLibrary::SphereTraceMulti(
+		GetWorld(),
+		MyLoc + FVector(0, 0, 50),
+		MyLoc + Fwd * BasicMeleeRange + FVector(0, 0, 50),
+		60.0f,
+		UEngineTypes::ConvertToTraceType(ECC_Pawn),
+		false, Ignored,
+		bShowDebugRanges ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None,
+		Hits, true);
+
+	for (const FHitResult& Hit : Hits)
+	{
+		APZZombieCharacter* Z = Cast<APZZombieCharacter>(Hit.GetActor());
+		if (!Z) continue;
+
+		const float Dist = FVector::Dist2D(MyLoc, Z->GetActorLocation());
+		if (Dist < ClosestDist)
+		{
+			ClosestDist   = Dist;
+			ClosestZombie = Z;
+		}
+	}
+
+	// ── 분기 결정 ───────────────────────────────────────────────────────
+	if (ClosestZombie && ClosestZombie->HealthComponent)
+	{
+		const bool bDown =
+			ClosestZombie->HealthComponent->bIsKnockedDownTemp ||
+			ClosestZombie->HealthComponent->bIsKnockedDownPermanent;
+
+		// 1) 30cm 이내 + 누워있음 → 머리찍기/밟기
+		if (bDown && ClosestDist <= HeadStrikeRange + 50.0f)
+		{
+			StompOrHeadStrike();
+			return;
+		}
+
+		// 2) 80cm 이내 + 서있음 → 밀치기
+		if (!bDown && ClosestDist <= PushRange)
+		{
+			PushAttack();
+			return;
+		}
+	}
+
+	// 3) 그 외 → 일반 공격
+	BasicMeleeAttack();
+}
+
+// ─── 일반 근접 공격 ──────────────────────────────────────────────────────────
+void APZCharacter::BasicMeleeAttack()
+{
+	const float Radius = 40.0f;
+	const FVector Start = GetActorLocation() + FVector(0, 0, 50);
+	const FVector End   = Start + GetActorForwardVector() * BasicMeleeRange;
+
+	TArray<FHitResult> Hits;
+	TArray<AActor*> Ignored; Ignored.Add(this);
+
+	const bool bHit = UKismetSystemLibrary::SphereTraceMulti(
+		GetWorld(), Start, End, Radius,
+		UEngineTypes::ConvertToTraceType(ECC_Pawn),
+		false, Ignored,
+		bShowDebugRanges ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None,
+		Hits, true);
+
+	if (!bHit) return;
+
+	// 데미지 = Strength + (근접무기 보유 시 MeleeDamage)
+	float Damage = Strength;
+	if (CurrentWeaponData && CurrentWeaponData->WeaponType == EPZWeaponType::Melee)
+	{
+		Damage += CurrentWeaponData->MeleeDamage;
+	}
+
+	TSet<AActor*> Done;
+	for (const FHitResult& Hit : Hits)
+	{
+		AActor* A = Hit.GetActor();
+		if (!A || Done.Contains(A)) continue;
+		Done.Add(A);
+
+		if (A->Implements<UPZDamageInterface>())
+		{
+			IPZDamageInterface::Execute_ReceiveDamage(
+				A, Damage, Hit.ImpactPoint, this, Hit.BoneName);
+		}
+	}
+}
+
+// ─── 밀치기 (80cm 이내 서있는 좀비) ──────────────────────────────────────────
+void APZCharacter::PushAttack()
+{
+	const FVector Start = GetActorLocation() + FVector(0, 0, 50);
+	const FVector End   = Start + GetActorForwardVector() * PushRange;
+
+	TArray<FHitResult> Hits;
+	TArray<AActor*> Ignored; Ignored.Add(this);
+
+	UKismetSystemLibrary::SphereTraceMulti(
+		GetWorld(), Start, End, 50.0f,
+		UEngineTypes::ConvertToTraceType(ECC_Pawn),
+		false, Ignored,
+		bShowDebugRanges ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None,
+		Hits, true);
+
+	for (const FHitResult& Hit : Hits)
+	{
+		APZZombieCharacter* Z = Cast<APZZombieCharacter>(Hit.GetActor());
+		if (!Z || !Z->HealthComponent) continue;
+
+		// 임시 눕힘 상태인 좀비는 밀치기 무시
+		if (Z->HealthComponent->bIsKnockedDownTemp ||
+		    Z->HealthComponent->bIsKnockedDownPermanent) continue;
+
+		// 넉백 임펄스 (전방으로)
+		if (USkeletalMeshComponent* ZombieMesh = Z->GetMesh())
+		{
+			const FVector Push = GetActorForwardVector() * PushImpulseStrength;
+			ZombieMesh->AddImpulse(Push, NAME_None, true);
+		}
+
+		// 30% 확률로 임시 눕힘
+		if (FMath::FRand() < PushKnockdownChance)
+		{
+			Z->HealthComponent->TryKnockdownTemporary();
+		}
+	}
+}
+
+// ─── 누워있는 적 머리찍기/밟기 (30cm 이내) ──────────────────────────────────
+void APZCharacter::StompOrHeadStrike()
+{
+	const FVector Start = GetActorLocation();
+	const FVector End   = Start + GetActorForwardVector() * (HeadStrikeRange + 50.0f);
+
+	TArray<FHitResult> Hits;
+	TArray<AActor*> Ignored; Ignored.Add(this);
+
+	UKismetSystemLibrary::SphereTraceMulti(
+		GetWorld(), Start, End, 40.0f,
+		UEngineTypes::ConvertToTraceType(ECC_Pawn),
+		false, Ignored,
+		bShowDebugRanges ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None,
+		Hits, true);
+
+	const bool bHasMelee =
+		CurrentWeaponData && CurrentWeaponData->WeaponType == EPZWeaponType::Melee;
+
+	const float Damage = bHasMelee
+		? CurrentWeaponData->HeadStrikeDamage
+		: StompDamage;
+
+	for (const FHitResult& Hit : Hits)
+	{
+		APZZombieCharacter* Z = Cast<APZZombieCharacter>(Hit.GetActor());
+		if (!Z || !Z->HealthComponent) continue;
+
+		// 누워있는 좀비만 대상
+		const bool bDown =
+			Z->HealthComponent->bIsKnockedDownTemp ||
+			Z->HealthComponent->bIsKnockedDownPermanent;
+		if (!bDown) continue;
+
+		// 머리 본 위치 기준 30cm 거리 체크
+		const FVector HeadLoc = Z->GetMesh()
+			? Z->GetMesh()->GetBoneLocation(TEXT("head"))
+			: Z->GetActorLocation();
+
+		if (FVector::Dist(GetActorLocation(), HeadLoc) > HeadStrikeRange + 50.0f) continue;
+
+		// 머리에 직접 데미지 적용
+		IPZDamageInterface::Execute_ReceiveDamage(
+			Z, Damage, HeadLoc, this, TEXT("head"));
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  IPZDamageInterface — 플레이어가 데미지 받을 때
+// ═══════════════════════════════════════════════════════════════════════════
+
+void APZCharacter::ReceiveDamage_Implementation(
+	float DamageAmount, FVector HitLocation, AActor* DamageDealer, FName HitBoneName)
+{
+	if (HealthComponent)
+	{
+		HealthComponent->ApplyDamageByBoneName(HitBoneName, DamageAmount, DamageDealer);
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  헤드샷 — 마우스-머리 거리 기반 확률 계산
+// ═══════════════════════════════════════════════════════════════════════════
+
+APZZombieCharacter* APZCharacter::FindPrimaryTargetZombie() const
+{
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return nullptr;
+
+	// 1순위: 마우스 커서 아래 직접 좀비
+	{
+		FHitResult Hit;
+		if (PC->GetHitResultUnderCursor(ECC_Pawn, false, Hit))
+		{
+			if (APZZombieCharacter* Z = Cast<APZZombieCharacter>(Hit.GetActor()))
+			{
+				return Z;
+			}
+		}
+	}
+
+	// 2순위: 전방 5000cm 스피어 트레이스 → 가장 가까운 좀비
+	const FVector Start = GetActorLocation() + FVector(0.0f, 0.0f, 80.0f);
+	const FVector End   = Start + GetActorForwardVector() * 5000.0f;
+
+	TArray<FHitResult> Hits;
+	TArray<AActor*> Ignored;
+	Ignored.Add(const_cast<APZCharacter*>(this));
+
+	UKismetSystemLibrary::SphereTraceMulti(
+		GetWorld(), Start, End, 30.0f,
+		UEngineTypes::ConvertToTraceType(ECC_Pawn),
+		false, Ignored, EDrawDebugTrace::None, Hits, true);
+
+	APZZombieCharacter* Closest = nullptr;
+	float ClosestDist = FLT_MAX;
+	for (const FHitResult& H : Hits)
+	{
+		APZZombieCharacter* Z = Cast<APZZombieCharacter>(H.GetActor());
+		if (!Z) continue;
+
+		const float D = FVector::Dist(GetActorLocation(), Z->GetActorLocation());
+		if (D < ClosestDist)
+		{
+			ClosestDist = D;
+			Closest     = Z;
+		}
+	}
+	return Closest;
+}
+
+bool APZCharacter::TryComputeHeadshot() const
+{
+	if (!CurrentWeaponData) return false;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return false;
+
+	// ── 마우스 커서 월드 위치 ──────────────────────────────────────────
+	FHitResult MouseHit;
+	if (!PC->GetHitResultUnderCursor(ECC_Visibility, false, MouseHit))
+	{
+		return false;
+	}
+	const FVector MouseWorld = MouseHit.ImpactPoint;
+
+	// ── 사격 대상 좀비 탐색 ─────────────────────────────────────────────
+	APZZombieCharacter* Target = FindPrimaryTargetZombie();
+	if (!Target || !Target->GetMesh())
+	{
+		return false;
+	}
+
+	// ── 마우스 ↔ 머리 거리 (XY 평면) ────────────────────────────────────
+	const FVector HeadLoc      = Target->GetMesh()->GetBoneLocation(TEXT("head"));
+	const float   MouseDist2D  = FVector::Dist2D(MouseWorld, HeadLoc);
+
+	const float ProximityScore = 1.0f - FMath::Clamp(
+		MouseDist2D / FMath::Max(HeadProximityRadius, 1.0f),
+		0.0f, 1.0f);
+
+	if (ProximityScore <= 0.0f) return false; // 머리 영역 밖 → 헤드샷 0%
+
+	// ── 거리 감쇠 ──────────────────────────────────────────────────────
+	const float ShooterDist = FVector::Dist(GetActorLocation(), Target->GetActorLocation());
+	float DistFactor = 1.0f;
+
+	if (ShooterDist > CurrentWeaponData->HeadshotEffectiveRange)
+	{
+		const float FalloffStart = CurrentWeaponData->HeadshotEffectiveRange;
+		const float FalloffEnd   = FMath::Max(CurrentWeaponData->MaxRange, FalloffStart + 1.0f);
+
+		const float Alpha = FMath::Clamp(
+			(ShooterDist - FalloffStart) / (FalloffEnd - FalloffStart),
+			0.0f, 1.0f);
+
+		DistFactor = 1.0f - Alpha;
+	}
+
+	// ── 최종 확률 ───────────────────────────────────────────────────────
+	const float Chance = ProximityScore * DistFactor;
+
+#if WITH_EDITOR
+	if (bShowDebugRanges && GEngine)
+	{
+		const FString Msg = FString::Printf(
+			TEXT("[Headshot] Prox=%.2f  DistFac=%.2f  Chance=%.0f%%  (%.1fm to target)"),
+			ProximityScore, DistFactor, Chance * 100.0f, ShooterDist / 100.0f);
+		GEngine->AddOnScreenDebugMessage(30, 1.5f, FColor::Magenta, Msg);
+	}
+#endif
+
+	return FMath::FRand() < Chance;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  디버그 — 사거리 표시
+// ═══════════════════════════════════════════════════════════════════════════
+
+void APZCharacter::ToggleDebugRanges()
+{
+	bShowDebugRanges = !bShowDebugRanges;
+
+	// UI 위젯 토글
+	if (bShowDebugRanges)
+	{
+		if (!RangeDebugWidget && RangeDebugWidgetClass)
+		{
+			RangeDebugWidget = CreateWidget<UPZRangeDebugWidget>(
+				GetWorld(), RangeDebugWidgetClass);
+		}
+		if (RangeDebugWidget && !RangeDebugWidget->IsInViewport())
+		{
+			RangeDebugWidget->AddToViewport(99); // 최상단 레이어
+		}
+	}
+	else
+	{
+		if (RangeDebugWidget && RangeDebugWidget->IsInViewport())
+		{
+			RangeDebugWidget->RemoveFromParent();
+		}
+	}
+
+#if WITH_EDITOR
+	const FString State = bShowDebugRanges ? TEXT("ON") : TEXT("OFF");
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(20, 3.f, FColor::Yellow,
+			FString::Printf(TEXT("[DebugRange] %s"), *State));
+	}
+#endif
+}
+
+void APZCharacter::DrawDebugRanges() const
+{
+	if (!CurrentWeaponData) return;
+
+	const FVector Center = GetActorLocation();
+	const UWorld* W      = GetWorld();
+	if (!W) return;
+
+	const EPZWeaponType WType = CurrentWeaponData->WeaponType;
+
+	if (WType == EPZWeaponType::Shotgun)
+	{
+		// ── 샷건: 부채꼴 원호(Arc) 표시 ─────────────────────────────
+		const float MaxR    = CurrentWeaponData->MaxRange;
+		const float Spread  = bIsAiming
+			? CurrentWeaponData->ShotgunAimSpreadAngle
+			: CurrentWeaponData->ShotgunSpreadAngle;
+
+		// 최대 사거리 원(빨강)
+		DrawDebugCircle(W, Center, MaxR, 64,
+			FColor::Red, false, -1.f, 0, 2.f,
+			FVector(1,0,0), FVector(0,1,0));
+
+		// 부채꼴 좌우 경계선
+		const FVector Fwd   = GetActorForwardVector();
+		const FQuat   LeftQ  = FQuat(FVector::UpVector,  FMath::DegreesToRadians(Spread));
+		const FQuat   RightQ = FQuat(FVector::UpVector, -FMath::DegreesToRadians(Spread));
+
+		DrawDebugLine(W, Center, Center + LeftQ.RotateVector(Fwd) * MaxR,
+			FColor::Orange, false, -1.f, 0, 2.f);
+		DrawDebugLine(W, Center, Center + RightQ.RotateVector(Fwd) * MaxR,
+			FColor::Orange, false, -1.f, 0, 2.f);
+	}
+	else if (WType == EPZWeaponType::Handgun
+		  || WType == EPZWeaponType::Rifle)
+	{
+		// ── 총기: 풀 데미지 범위(초록) / 최소 데미지 범위(노랑) / 최대 사거리(빨강) ──
+		DrawDebugCircle(W, Center, CurrentWeaponData->FalloffStartRange, 64,
+			FColor::Green, false, -1.f, 0, 2.f,
+			FVector(1,0,0), FVector(0,1,0));
+
+		DrawDebugCircle(W, Center, CurrentWeaponData->FalloffEndRange, 64,
+			FColor::Yellow, false, -1.f, 0, 2.f,
+			FVector(1,0,0), FVector(0,1,0));
+
+		DrawDebugCircle(W, Center, CurrentWeaponData->MaxRange, 64,
+			FColor::Red, false, -1.f, 0, 2.f,
+			FVector(1,0,0), FVector(0,1,0));
+	}
+	else if (WType == EPZWeaponType::Melee || WType == EPZWeaponType::None)
+	{
+		// ── 근접/맨손: 공격 사거리 구 표시 ──────────────────────────
+		const float AttackRange = 150.0f;
+		DrawDebugSphere(W,
+			Center + GetActorForwardVector() * AttackRange,
+			40.0f, 12, FColor::Cyan, false, -1.f, 0, 2.f);
+	}
+
+	// 위젯에 수치 업데이트
+	if (RangeDebugWidget)
+	{
+		RangeDebugWidget->UpdateWeaponInfo(CurrentWeaponData, bIsAiming);
+	}
+}

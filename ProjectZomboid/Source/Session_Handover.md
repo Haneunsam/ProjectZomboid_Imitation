@@ -2,6 +2,19 @@
 
 ---
 
+## 0. Claude에게 — 세션 규칙 (필독)
+
+> **세션 시작 시**: 이 파일을 반드시 먼저 읽고 현재 진행 상황을 파악한 뒤 작업을 시작할 것.
+>
+> **세션 종료 시** (사용자가 작업을 마쳤다고 하거나 대화가 끝날 때): 이 파일의 해당 섹션을 업데이트할 것.
+> - 완료된 작업 → **섹션 1**의 완료 목록에 추가
+> - 새로 발견된 버그 및 수정 → **섹션 2**에 기록
+> - 미완료 블루프린트 작업 → **섹션 3** 갱신
+> - 알려진 이슈 변동 → **섹션 4** 갱신
+> - **섹션 5의 "다음 세션 시작 프롬프트"**를 다음 세션에서 이어받을 작업 기준으로 반드시 최신화할 것.
+
+---
+
 ## 1. 현재 진행 상황 (Current Progress)
 
 ### ✅ 완료된 시스템
@@ -35,6 +48,103 @@
   - `UnarmedJabMontage` — 기본 잽
   - `UnarmedPushMontage` — 밀치기 (맨손/근접무기 공용)
   - `UnarmedStompMontage` — 쓰러진 적 발로 내려찍기 (맨손/근접무기 공용)
+
+#### 데미지 시스템 (이번 세션 추가)
+
+**`PZItemData.h` — 무기 스탯 추가 (Category: "Weapon Stats")**
+- `BaseDamage` — 기본 데미지 (총기: 탄당, 근접: 1회당)
+- `BulletInitialSpeed` — 총알 초기 속도 (cm/s, 기본 50000)
+- `MaxRange` — 최대 사거리 (cm, 기본 100000=1000m, 샷건 권장 10000~20000)
+- `FalloffStartRange` — 데미지 감소 시작 거리 (cm)
+- `FalloffEndRange` — 데미지 감소 종료 거리 (cm)
+- `MinDamagePercent` — 최소 데미지 비율 (0.0~1.0, 기본 0.6=60%)
+- `ShotgunPelletCount` — 산탄 수 (Shotgun 전용, 기본 8)
+- `ShotgunSpreadAngle` — 비조준 확산 반각 (도, 기본 10°)
+- `ShotgunAimSpreadAngle` — 조준 확산 반각 (도, 기본 4°)
+- `MeleeDamage` — 근접무기 전용 데미지 (최종 = Strength + MeleeDamage)
+
+**`PZBulletActor.cpp` — 총알 구현 (신규 파일)**
+- Tick에서 직접 이동 (ProjectileMovement 미사용)
+- 거리 비례 속도 감쇠: MaxRange 도달 시 초기속도의 30%까지 선형 감소
+- OnComponentHit + Sweep 충돌 이중 탐지 → `HandleHit()` 공용 처리
+- `CalculateFinalDamage()`: FalloffStart~FalloffEnd 구간 선형 보간
+- `IPZDamageInterface` 구현체에 데미지 전달
+
+**`PZCharacter.h/.cpp` — 전투 함수 추가**
+- `Strength` (float, 기본 10) — 근접 기본 데미지에 합산
+- `CurrentAmmo`, `MaxAmmo` — 탄약 변수 (탄약 소모 로직은 블루프린트에서 처리)
+- `BulletActorClass` — BP에서 할당할 총알 클래스
+- `FireAction`, `ReloadAction`, `DebugRangeAction` — 입력 액션 변수 추가
+- `FireWeapon()` — 총기/샷건 분기, 샷건은 VRandCone으로 랜덤 산탄 스폰
+- `SpawnBullet()` — 총알 헬퍼 (InitBullet 호출)
+- `MeleeAttack()` — SphereTraceMulti로 전방 150cm 탐색, Strength+MeleeDamage 적용
+- `ToggleDebugRanges()` — 디버그 범위 토글 + UI 위젯 on/off
+- `DrawDebugRanges()` — 무기 종류별 DrawDebugCircle/Line/Sphere
+
+**`PZRangeDebugWidget.h/.cpp` — 디버그 UI (신규 파일)**
+- `UpdateWeaponInfo(UPZItemData*, bIsAiming)` — 무기 이름/데미지/사거리/확산각 표시
+- BindWidget 목록: WeaponNameText, DamageText, FalloffStartText, FalloffEndText, MaxRangeText, SpreadText, MinDamageText
+
+**`APZZombieCharacter`** — 이전 세션에서 이미 완성 (AI 없는 허수아비)
+- `ReceiveDamage_Implementation` 구현 완료
+- `OnDamageReceived`, `OnDeath` BP 이벤트 연결 대기 중
+
+#### 부위별 체력 시스템 (이번 세션 추가) ★ 핵심
+
+**`PZBodyPartType.h`** (신규)
+- `EPZBodyPart` enum: None / Head / Torso / LeftArm / RightArm / LeftLeg / RightLeg
+
+**`PZHealthComponent.h/.cpp`** (신규)
+- 부위별 체력 + 전체 체력 관리
+- 머리/몸통/전체 0 → 즉사
+- 몸통 70% 미만 → 출혈 (초당 1 데미지로 몸통+전체 동시 감소)
+- 양다리 0 (좀비) → 영구 눕힘
+- `LimbEffectThreshold = 0.5` (50% 미만부터 효과)
+- `MaxEffectReduction = 0.5` (최대 50% 감소)
+- `GetMovementSpeedMultiplier()`, `GetAttackSpeedMultiplier()`, `GetAimSwayMultiplier()`
+- `BoneNameToBodyPart()` — UE5 Manny 본 이름 매핑
+- 이벤트: `OnDeath`, `OnPartDamaged`, `OnKnockedDown`, `OnGetUp`
+
+**`PZDamageInterface.h`** — `ReceiveDamage`에 `FName HitBoneName` 파라미터 추가
+
+**`PZBulletActor`** — Sweep/OnHit Hit.BoneName을 ReceiveDamage로 전달
+
+**`PZZombieCharacter`** — UPZHealthComponent 부착, 좀비 기본값 (Head=10, Torso=30, Arm=20, Leg=25, Total=80, bIsZombie=true)
+- BP 이벤트: `OnDamageReceived(Damage, Loc, Dealer, BoneName)`, `OnDeath(Killer)`, `OnKnockedDown(bPermanent)`, `OnGetUp()`
+
+**`PZCharacter`** — UPZHealthComponent 부착, 플레이어 기본값 (Head=35, Torso=85, Arm=60, Leg=65, Total=200, bIsZombie=false)
+- `IPZDamageInterface` 구현 (플레이어도 데미지 받음)
+- 거리/상태별 자동 분기 디스패처:
+  - **30cm 이내 + 누워있는 좀비** → `StompOrHeadStrike()` (맨손=2, 근접무기=`HeadStrikeDamage` 4)
+  - **80cm 이내 + 서있는 좀비** → `PushAttack()` (넉백 임펄스 + 30% 확률 임시 눕힘)
+  - **그 외 (150cm 이내)** → `BasicMeleeAttack()` (Strength + MeleeDamage)
+- `SpawnBullet()`: 팔 부상 시 VRandCone으로 조준 흔들림 (최대 8°)
+- `UpdateMovementSpeed()`: 무게 + 다리 부상 합산 적용
+- 새 프로퍼티: StompDamage(2), PushKnockdownChance(0.3), PushRange(80), HeadStrikeRange(30), BasicMeleeRange(150), PushImpulseStrength(800), AimSwayMaxDeg(8)
+
+**`PZItemData.h`** — `HeadStrikeDamage = 4.0f` 추가 (근접무기 머리찍기)
+
+#### 마우스 기반 헤드샷 시스템 (이번 세션 추가)
+
+**작동 원리:**
+- 사격 순간 마우스 커서 월드 위치(`GetHitResultUnderCursor`) ↔ 좀비 머리 본 위치 2D 거리 계산
+- `ProximityScore = 1 - clamp(MouseDist2D / HeadProximityRadius, 0, 1)`
+- `DistanceFactor = 1.0` (사거리 ≤ HeadshotEffectiveRange) → `0.0` (사거리 = MaxRange)에서 선형 감쇠
+- `최종 확률 = ProximityScore × DistanceFactor` 굴림
+- 성공 시 총알의 `bForceHeadshot=true` → 적중 시 본 이름을 `"head"`로 강제 오버라이드
+
+**관련 변수:**
+- `PZItemData.HeadshotEffectiveRange` (기본 5000cm = 50m, 권총 기준)
+- `PZCharacter.HeadProximityRadius` (기본 30cm — 마우스가 머리에서 이 거리 이내면 100%)
+- `PZBulletActor.bForceHeadshot` (사격 시점에 굴린 결과)
+
+**관련 함수:**
+- `PZCharacter::FindPrimaryTargetZombie()` — 커서 아래 좀비 → 전방 5m 가장 가까운 좀비 순으로 탐색
+- `PZCharacter::TryComputeHeadshot()` — 확률 계산 + 굴림 (Handgun/Rifle만, 샷건 제외)
+- `PZBulletActor::HandleHit()` — `bForceHeadshot` 시 본 이름 → `"head"` 강제 변경
+
+**디버그:**
+- `bShowDebugRanges = true` (F1 토글) 시 사격할 때마다 화면에 `[Headshot] Prox=0.85 DistFac=1.00 Chance=85% (3.2m to target)` 출력
 
 #### 웅크리기 (Crouch)
 - `CharacterMovement`의 `bCanCrouch = true` 설정.
@@ -70,6 +180,35 @@
 ---
 
 ## 3. 블루프린트 작업 가이드 (미완료 → 다음 세션 이어서)
+
+### 이번 세션에서 추가된 블루프린트 작업 목록
+
+#### BP 설정 — BP_PZCharacter (이벤트 그래프)
+1. **`FireAction` 입력 액션 생성** (IMC에 좌클릭 등록) → `FireAction` 변수에 할당.
+2. **`DebugRangeAction` 입력 액션 생성** (F1 등) → `DebugRangeAction` 변수에 할당.
+3. **`BulletActorClass`** → `BP_PZBullet` (APZBulletActor 파생 BP) 할당.
+4. **`RangeDebugWidgetClass`** → `WBP_RangeDebug` (UPZRangeDebugWidget 파생 BP) 할당.
+5. 공격 이벤트 그래프에서 **무기 종류 분기**:
+   - **Melee/None** → `MeleeAttack()` C++ 호출
+   - **총기** → `FireWeapon()` C++ 호출 → `CurrentAmmo - 1`
+   - **총기 탄약 = 0** → `DryFireMontage` 재생 (C++ 호출 생략)
+
+#### BP 설정 — BP_PZBullet (APZBulletActor 파생)
+- `CollisionSphere` Profile을 `BlockAllDynamic`으로 유지.
+- 총알 메시 선택적으로 할당 (없어도 동작).
+
+#### WBP_RangeDebug (UPZRangeDebugWidget 파생)
+- 다음 이름으로 `TextBlock` 위젯 생성 (BindWidget):
+  - `WeaponNameText`, `DamageText`, `FalloffStartText`, `FalloffEndText`, `MaxRangeText`, `SpreadText`, `MinDamageText`
+- 배경 패널은 반투명 검정 권장.
+- 화면 좌상단 고정 앵커.
+
+#### BP_Zombie_Dummy (APZZombieCharacter 파생)
+- `OnDamageReceived` 이벤트에서 피격 파티클/데미지 숫자 표시.
+- `OnDeath` 이벤트에서 래그돌 또는 사망 애니메이션 처리.
+- 에디터에서 적당한 위치에 배치 후 테스트.
+
+
 
 ### A. AnimGraph - 미완료 확인 필요 항목
 1. `Blend Poses by EPZWeaponType`의 `Active Enum Value` 핀 → `CurrentWeaponType` 변수 연결 여부 확인.
@@ -116,7 +255,13 @@
 
 ## 5. 다음 세션 시작 프롬프트
 
-> "안녕, 나는 Project Zomboid 모작 프로젝트를 진행 중이야. `Session_Handover.md` 파일을 먼저 읽어서 현재 진행 상황을 파악해줘. 오늘 이어서 할 작업은 블루프린트 가이드 섹션 B(LowerBody 슬롯 연결), C(공격 이벤트 노드 구성), D(장전 이벤트) 중 아직 못 한 부분을 마무리하고, 이후 **실제 데미지 처리(좀비에게 데미지 적용)**와 **총기 탄약 시스템 변수 구성**을 구현하고 싶어."
+> "안녕, 나는 Project Zomboid 모작 프로젝트를 진행 중이야. `Session_Handover.md` 파일을 먼저 읽어서 현재 진행 상황을 파악해줘. 오늘 이어서 할 작업은:
+> 1. **부위별 체력 시스템 BP 연동** — `BP_Zombie_Dummy`의 `OnDamageReceived(BoneName)` / `OnDeath` / `OnKnockedDown(bPermanent)` / `OnGetUp` 이벤트 구현 (피격 파티클, 눕힘 애니메이션, 사망 래그돌 등)
+> 2. **HUD UI** — 플레이어 6개 부위 체력바 + 전체 체력바 위젯 만들기 (HealthComponent 이벤트 바인딩)
+> 3. **이전 세션 미완료 BP 연결**: `WBP_RangeDebug` UMG 위젯 (TextBlock 7개 이름 맞추기), 탄약 소모/장전 이벤트 그래프
+> 4. **공격 모션 분기 BP** — `BP_PZCharacter` 좌클릭에서 C++ `MeleeAttack()` 분기 디스패처가 자동으로 결정한 분기에 맞는 애니메이션 몽타주 재생 연결 (BasicMelee/Push/Stomp/HeadStrike)
+> 5. **AI 좀비 기초** — 순찰, 탐지, 추격 (영구 눕힘 시 이동 비활성화)
+> 6. **출혈 비주얼** — 화면 가장자리 빨간 비네트 등 (HealthComponent->bIsBleeding 바인딩)"
 
 ---
 

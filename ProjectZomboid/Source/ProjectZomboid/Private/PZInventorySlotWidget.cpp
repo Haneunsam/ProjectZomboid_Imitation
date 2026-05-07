@@ -53,7 +53,7 @@ void UPZInventorySlotWidget::UseItem()
 	APZCharacter* PZCharacter = Cast<APZCharacter>(GetOwningPlayerPawn());
 	if (PZCharacter)
 	{
-		PZCharacter->EquipItem(ItemData);
+		PZCharacter->UseItem(ItemData); // 수정: EquipItem → UseItem
 	}
 }
 
