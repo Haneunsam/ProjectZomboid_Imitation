@@ -161,6 +161,11 @@ protected:
 	/** 현재 무기 사거리를 DrawDebug로 월드에 그림 */
 	void DrawDebugRanges() const;
 
+	protected:
+		// 현재 장착된 주무기의 '현재 탄약' (이걸로 개별 관리!)
+		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat|Ammo")
+		int32 EquippedWeaponCurrentAmmo;
+
 	/** 총알 스폰 헬퍼 (방향 벡터 하나를 받아 총알 생성) */
 	void SpawnBullet(const FVector& SpawnLocation, const FVector& Direction, bool bForceHeadshot = false) const;
 
@@ -297,15 +302,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Stats", meta = (ClampMin = "0"))
 	float HeadProximityRadius = 30.0f;
 
-	// ─── 탄약 ─────────────────────────────────────────────────────────────
+	// ─── 탄약 ────────────────────────────────────────
 
-	/** 현재 장착 무기의 남은 탄약 */
+		/** 현재 장착 무기의 남은 탄약 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Combat|Ammo")
 	int32 CurrentAmmo = 0;
 
 	/** 현재 장착 무기의 최대 탄창 크기 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Ammo", meta = (ClampMin = "0"))
 	int32 MaxAmmo = 30;
+
+	// 기존에 에러가 났던 그 함수들 부활!
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat|Ammo")
+	int32 GetCurrentAmmo() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat|Ammo")
+	int32 GetMaxAmmo() const;
+
+	// 총알을 쐈을 때 탄약을 깎는 함수 (블루프린트에서 호출)
+	UFUNCTION(BlueprintCallable, Category = "Combat|Ammo")
+	void ConsumeAmmo();
 
 	// ─── 총알 액터 클래스 ────────────────────────────────────────────────
 

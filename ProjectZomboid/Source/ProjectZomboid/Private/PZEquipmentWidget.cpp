@@ -1,7 +1,9 @@
 #include "PZEquipmentWidget.h"
 #include "PZEquipSlotWidget.h"
+#include "PZBodyHealthWidget.h"
 #include "PZCharacter.h"
 #include "PZContextMenuWidget.h"
+#include "PZHealthComponent.h"
 
 void UPZEquipmentWidget::RefreshEquipment(APZCharacter* Character)
 {
@@ -42,6 +44,15 @@ void UPZEquipmentWidget::RefreshEquipment(APZCharacter* Character)
 	{
 		TObjectPtr<UPZItemData>* FoundItem = Character->EquippedItems.Find(EPZEquipmentSlot::Shoes);
 		Slot_Shoes->UpdateSlot(FoundItem ? *FoundItem : nullptr, EPZEquipmentSlot::Shoes);
+	}
+
+	// 부위별 체력 위젯 초기화
+	if (BodyHealthWidget)
+	{
+		if (UPZHealthComponent* HealthComp = Character->FindComponentByClass<UPZHealthComponent>())
+		{
+			BodyHealthWidget->InitWithHealthComponent(HealthComp);
+		}
 	}
 }
 

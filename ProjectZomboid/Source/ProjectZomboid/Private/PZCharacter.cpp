@@ -657,13 +657,17 @@ void APZCharacter::EquipItem(UPZItemData* Item)
 		EquipmentCaptureComponent->CaptureScene();
 	}
 
-	// 6. 무기 상태 업데이트 (애니메이션용) - Primary 슬롯 장착 시에만 현재 무기로 설정
+	// 6. 무기 상태 업데이트 (애니메이션용)
 	if (Item->EquipSlot == EPZEquipmentSlot::Primary)
 	{
-		// WeaponType이 None(비무기 아이템)이 아닐 때만 무기 소지로 판정
 		bIsHoldingWeapon = (Item->WeaponType != EPZWeaponType::None);
 		CurrentWeaponType = Item->WeaponType;
 		CurrentWeaponData = Item;
+
+		// ⭐️ 새 무기를 들었으니 탄약 채워주기!
+		// (만약 인벤토리에서 기존 잔탄수를 기억해왔다면 그 값을 넣어줘야 하지만, 
+		// 당장 시스템이 없다면 우선 무조건 꽉 채워주는 것으로 임시 구현합니다.)
+		EquippedWeaponCurrentAmmo = GetMaxAmmo();
 	}
 }
 
@@ -728,6 +732,9 @@ void APZCharacter::UnequipItem(EPZEquipmentSlot Slot)
 			bIsHoldingWeapon = false;
 			CurrentWeaponType = EPZWeaponType::None;
 			CurrentWeaponData = nullptr;
+
+			// ⭐️ 손에서 무기를 놨으니 탄약도 0으로!
+			EquippedWeaponCurrentAmmo = 0;
 		}
 	}
 }
@@ -1384,5 +1391,29 @@ void APZCharacter::DrawDebugRanges() const
 	if (RangeDebugWidget)
 	{
 		RangeDebugWidget->UpdateWeaponInfo(CurrentWeaponData, bIsAiming);
+	}
+
+}
+
+// 1. 탄약 관련 함수들 구현
+int32 APZCharacter::GetCurrentAmmo() const
+{
+	return EquippedWeaponCurrentAmmo; // 내 손에 있는 총의 남은 알
+}
+
+int32 APZCharacter::GetMaxAmmo() const
+{
+	if (CurrentWeaponData)
+	{
+		return CurrentWeaponData->MaxAmmo; // 데이터 에셋에서 원본 최대치 가져옴
+	}
+	return 0;
+}
+
+void APZCharacter::ConsumeAmmo()
+{
+	if (EquippedWeaponCurrentAmmo > 0)
+	{
+		EquippedWeaponCurrentAmmo--;
 	}
 }

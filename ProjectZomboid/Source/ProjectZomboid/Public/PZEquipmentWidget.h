@@ -5,6 +5,7 @@
 #include "PZEquipmentWidget.generated.h"
 
 class UPZEquipSlotWidget;
+class UPZBodyHealthWidget;
 class APZCharacter;
 
 /**
@@ -41,4 +42,8 @@ protected:
 
 	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
 	TObjectPtr<UPZEquipSlotWidget> Slot_Shoes;
+
+	/** 부위별 체력 표시 위젯 (플레이어 모델 옆에 배치) */
+	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
+	TObjectPtr<UPZBodyHealthWidget> BodyHealthWidget;
 };

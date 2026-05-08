@@ -126,6 +126,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats", meta = (ClampMin = "0"))
 	float MaxRange = 100000.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats", meta = (ClampMin = "1"))
+	int32 MaxAmmo = 30;
 	/**
 	 * 데미지 감소 시작 거리 (cm).
 	 * 이 거리까지는 BaseDamage 100% 적용.
@@ -192,4 +194,5 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Use Effect")
 	float StaminaRestoreAmount = 0.0f;
+
 };
