@@ -7,6 +7,7 @@
 #include "InputActionValue.h"
 #include "PZItemData.h"
 #include "PZDamageInterface.h"
+#include "PZInventoryComponent.h"
 #include "PZCharacter.generated.h"
 
 class USpringArmComponent;
@@ -17,10 +18,11 @@ class UPZStatComponent;
 class UWidgetComponent;
 class UPZInventoryComponent;
 class UPZInventoryWidget;
-class APZBulletActor;
 class UPZRangeDebugWidget;
 class UPZHealthComponent;
 class APZZombieCharacter;
+class UPZCrosshairWidget;
+class UPZAmmoWidget;
 
 UCLASS()
 class PROJECTZOMBOID_API APZCharacter : public ACharacter, public IPZDamageInterface
@@ -35,6 +37,8 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	virtual void Tick(float DeltaTime) override;
+
+	float LastFireTime = 0.0f;
 
 	/** Camera Components */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
@@ -161,35 +165,6 @@ protected:
 	/** 현재 무기 사거리를 DrawDebug로 월드에 그림 */
 	void DrawDebugRanges() const;
 
-	protected:
-		// 현재 장착된 주무기의 '현재 탄약' (이걸로 개별 관리!)
-		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat|Ammo")
-		int32 EquippedWeaponCurrentAmmo;
-
-	/** 총알 스폰 헬퍼 (방향 벡터 하나를 받아 총알 생성) */
-	void SpawnBullet(const FVector& SpawnLocation, const FVector& Direction, bool bForceHeadshot = false) const;
-
-	/**
-	 * 사격 시점에 헤드샷 확률을 계산하고 굴림.
-	 *
-	 * 계산식:
-	 *   Chance = ProximityScore × DistanceFactor
-	 *   ProximityScore = 1 - clamp(MouseToHeadDist2D / HeadProximityRadius, 0, 1)
-	 *   DistanceFactor = 1 (거리 ≤ HeadshotEffectiveRange)
-	 *                  = 선형감쇠 → 0 (거리 ≤ MaxRange)
-	 *
-	 * @return  굴림 결과 (true 면 강제 헤드샷)
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Combat")
-	bool TryComputeHeadshot() const;
-
-	/**
-	 * 사격 대상 좀비 1마리 탐색.
-	 * 1순위: 마우스 커서 아래 좀비
-	 * 2순위: 전방 5000cm 이내 가장 가까운 좀비
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Combat")
-	APZZombieCharacter* FindPrimaryTargetZombie() const;
 
 	void Move(const FInputActionValue& Value);
 	void StartSprint();
@@ -294,40 +269,89 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Stats", meta = (ClampMin = "0", ClampMax = "30"))
 	float AimSwayMaxDeg = 8.0f;
 
+	// ─── 탄약 (인벤토리 슬롯에 저장, FPZInventorySlot::CurrentAmmo 사용) ──
+
 	/**
-	 * 헤드샷 판정 반경 (cm).
-	 * 마우스 커서 월드 위치가 좀비 머리에서 이 거리 이내일 때 확률 1.0.
-	 * 거리가 커질수록 선형 감쇠 (0 거리 → 1.0, 이 반경 → 0.0).
+	 * 발사 몽타주 해석기.
+	 * CurrentWeaponData->AttackMontage 가 설정되어 있으면 그것을 반환.
+	 * 없으면 FallbackMontage(블루프린트 맵 룩업 결과)를 그대로 반환.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Stats", meta = (ClampMin = "0"))
-	float HeadProximityRadius = 30.0f;
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	UAnimMontage* ResolveFireMontage(UAnimMontage* FallbackMontage) const;
 
-	// ─── 탄약 ────────────────────────────────────────
+	/**
+	 * 현재 발사 가능한지 반환.
+	 * 마지막 발사로부터 몽타주 길이(= 발사 간격)만큼 경과했으면 true.
+	 * 블루프린트의 몽타주 비교 게이트 대신 이 함수를 사용.
+	 */
+	/*UFUNCTION(BlueprintPure, Category = "Combat")
+	bool CanFire() const;*/
 
-		/** 현재 장착 무기의 남은 탄약 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Combat|Ammo")
-	int32 CurrentAmmo = 0;
+	/**
+	 * 발사 시점을 기록. FireWeapon() 직전 블루프린트에서 호출.
+	 * CanFire()의 쿨다운 기준 시간을 갱신한다.
+	 */
+	/*UFUNCTION(BlueprintCallable, Category = "Combat")
+	void RecordFireTime();*/
 
-	/** 현재 장착 무기의 최대 탄창 크기 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Ammo", meta = (ClampMin = "0"))
-	int32 MaxAmmo = 30;
-
-	// 기존에 에러가 났던 그 함수들 부활!
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat|Ammo")
+	/** 현재 Primary 무기의 남은 탄약 반환 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Ammo")
 	int32 GetCurrentAmmo() const;
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat|Ammo")
+	/** 현재 Primary 무기의 최대 탄창 반환 (ItemData.MaxAmmo) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Ammo")
 	int32 GetMaxAmmo() const;
 
-	// 총알을 쐈을 때 탄약을 깎는 함수 (블루프린트에서 호출)
+	/** 현재 Primary 무기 탄약 직접 설정 (장전 완료 시 호출) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Ammo")
+	void SetCurrentAmmo(int32 NewAmmo);
+
+	/** 탄약 1 소모 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Ammo")
 	void ConsumeAmmo();
 
 	// ─── 총알 액터 클래스 ────────────────────────────────────────────────
 
-	/** 발사 시 스폰할 총알 클래스 (BP에서 할당) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat")
-	TSubclassOf<APZBulletActor> BulletActorClass;
+	// ─── 조준원 크로스헤어 ──────────────────────────────────────────────────
+
+	/** 총기 조준원 위젯 클래스 (BP에서 할당) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Crosshair")
+	TSubclassOf<class UPZCrosshairWidget> CrosshairWidgetClass;
+
+	/** 활성화된 크로스헤어 위젯 인스턴스 */
+	UPROPERTY()
+	class UPZCrosshairWidget* CrosshairWidget = nullptr;
+
+	/** 크로스헤어 표시 (총기 장착 시 호출) */
+	void ShowCrosshair();
+
+	/** 크로스헤어 숨김 (총기 해제/근접무기 장착 시 호출) */
+	void HideCrosshair();
+
+	// ─── 탄약 HUD ────────────────────────────────────────────────────────────
+
+	/** 탄약 위젯 클래스 (BP에서 할당) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Ammo")
+	TSubclassOf<UPZAmmoWidget> AmmoWidgetClass;
+
+	/** 활성화된 탄약 위젯 인스턴스 */
+	UPROPERTY()
+	UPZAmmoWidget* AmmoWidget = nullptr;
+
+	/** 탄약 HUD 표시 + 수치 초기화 */
+	void ShowAmmoWidget(int32 Current, int32 Max);
+
+	/** 탄약 HUD 숨김 */
+	void HideAmmoWidget();
+
+	/**
+	 * 현재 마우스 위치와 거리에 따른 크로스헤어 반지름 계산.
+	 * @return 화면 픽셀 단위 반지름
+	 */
+	float ComputeCrosshairRadius(float DistanceCm) const;
+
+	/** 마우스 커서의 월드 위치를 지면 기준으로 구함 (LineTrace) */
+	FVector GetMouseWorldPosition() const;
 
 	// ─── 디버그 사거리 UI ────────────────────────────────────────────────
 
@@ -342,17 +366,34 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat|Debug")
 	bool bShowDebugRanges = false;
 
-	// 맨손 잽 (기본 공격) 애니메이션 몽타주
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Unarmed")
+	// ─── 맨손 공격 몽타주 ────────────────────────────────────────────────
+
+	// 맨손 잽 (기본 공격)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Melee Montage")
 	TObjectPtr<class UAnimMontage> UnarmedJabMontage;
 
-	// 맨손 밀치기 (몬스터 근접 시) 애니메이션 몽타주
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Unarmed")
+	// 맨손 밀치기 (근접 좀비 밀기)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Melee Montage")
 	TObjectPtr<class UAnimMontage> UnarmedPushMontage;
 
-	// 맨손 발로 내려찍기 (쓰러진 적) 애니메이션 몽타주
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Unarmed")
+	// 맨손 발로 내려찍기 (쓰러진 적)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Melee Montage")
 	TObjectPtr<class UAnimMontage> UnarmedStompMontage;
+
+	// ─── 근접무기 공격 몽타주 ─────────────────────────────────────────────
+	// ItemData의 AttackMontage가 없을 때 폴백으로 사용됨
+
+	// 근접무기 기본 공격 (스윙)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Melee Montage")
+	TObjectPtr<class UAnimMontage> MeleeWeaponAttackMontage;
+
+	// 근접무기로 밀치기
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Melee Montage")
+	TObjectPtr<class UAnimMontage> MeleeWeaponPushMontage;
+
+	// 근접무기로 쓰러진 적 머리찍기
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Melee Montage")
+	TObjectPtr<class UAnimMontage> MeleeWeaponStompMontage;
 
 	// 아이템 사용 (음식 먹기 등)
 	UFUNCTION(BlueprintCallable, Category = "Inventory")

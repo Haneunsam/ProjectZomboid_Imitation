@@ -12,7 +12,8 @@ void UPZBodyHealthWidget::InitWithHealthComponent(UPZHealthComponent* HealthComp
 	if (!HealthComp) return;
 
 	CachedHealthComp = HealthComp;
-	HealthComp->OnPartDamaged.AddDynamic(this, &UPZBodyHealthWidget::OnPartDamaged);
+	// AddUniqueDynamic: 이미 바인딩된 경우 중복 추가 방지
+	HealthComp->OnPartDamaged.AddUniqueDynamic(this, &UPZBodyHealthWidget::OnPartDamaged);
 
 	// 초기값 전체 갱신
 	UpdatePartText(Text_Head,     TEXT("머리"),   HealthComp->HeadHealth,     HealthComp->HeadMaxHealth);

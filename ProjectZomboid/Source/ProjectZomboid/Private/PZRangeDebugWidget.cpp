@@ -82,23 +82,25 @@ void UPZRangeDebugWidget::UpdateWeaponInfo(UPZItemData* WeaponData, bool bIsAimi
 			FString::Printf(TEXT("최소 %.0f%%"), WeaponData->MinDamagePercent * 100.0f)));
 	}
 
-	// ── 샷건 확산각 ─────────────────────────────────────────────────────
+	// ── 조준원 크기 ─────────────────────────────────────────────────────
 	if (SpreadText)
 	{
-		if (WeaponData->WeaponType == EPZWeaponType::Shotgun)
+		if (WeaponData->WeaponType == EPZWeaponType::Shotgun
+		 || WeaponData->WeaponType == EPZWeaponType::Handgun
+		 || WeaponData->WeaponType == EPZWeaponType::Rifle)
 		{
-			const float Spread = bIsAiming
-				? WeaponData->ShotgunAimSpreadAngle
-				: WeaponData->ShotgunSpreadAngle;
+			const float Radius = bIsAiming
+				? WeaponData->MinCrosshairRadius * WeaponData->AimCrosshairMultiplier
+				: WeaponData->MaxCrosshairRadius;
 
 			SpreadText->SetText(FText::FromString(
-				FString::Printf(TEXT("확산각: %.1f° %s"),
-					Spread,
+				FString::Printf(TEXT("조준원: %.0fpx %s"),
+					Radius,
 					bIsAiming ? TEXT("(조준)") : TEXT("(비조준)"))));
 		}
 		else
 		{
-			SpreadText->SetText(FText::FromString(TEXT("확산각: N/A")));
+			SpreadText->SetText(FText::FromString(TEXT("조준원: N/A")));
 		}
 	}
 }

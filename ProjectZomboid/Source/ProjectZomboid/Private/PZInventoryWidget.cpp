@@ -67,7 +67,7 @@ void UPZInventoryWidget::RefreshInventory()
 
 	// 2. 아이템 리스트를 돌며 슬롯 위젯 생성 및 추가
 	APZCharacter* Character = Cast<APZCharacter>(GetOwningPlayerPawn());
-	const TArray<UPZItemData*>& Items = InventoryComp->GetItems();
+	const TArray<UPZItemData*> Items = InventoryComp->GetItems();
 	
 	UE_LOG(LogTemp, Warning, TEXT("Refreshing Inventory UI. Item Count: %d"), Items.Num());
 

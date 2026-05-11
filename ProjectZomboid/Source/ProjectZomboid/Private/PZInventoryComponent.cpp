@@ -24,36 +24,74 @@ void UPZInventoryComponent::AddItem(UPZItemData* NewItem)
 {
 	if (NewItem)
 	{
-		// 아이템을 고유한 인스턴스로 복제하여 추가합니다. (같은 아이템 중복 장착 방지)
+		// 고유 인스턴스로 복제 → 같은 DataAsset이라도 슬롯마다 독립 포인터 보장
 		UPZItemData* InstanceItem = DuplicateObject<UPZItemData>(NewItem, this);
-		Items.Add(InstanceItem);
+
+		FPZInventorySlot NewSlot;
+		NewSlot.ItemData    = InstanceItem;
+		NewSlot.CurrentAmmo = 0; // 처음엔 탄약 0 (장전해야 사용 가능)
+
+		Slots.Add(NewSlot);
 		UpdateTotalWeight();
 	}
 }
 
 void UPZInventoryComponent::RemoveItem(UPZItemData* ItemToRemove)
 {
-	if (ItemToRemove)
+	if (!ItemToRemove) return;
+
+	const int32 Idx = Slots.IndexOfByPredicate([&](const FPZInventorySlot& S)
 	{
-		Items.RemoveSingle(ItemToRemove);
+		return S.ItemData == ItemToRemove;
+	});
+
+	if (Idx != INDEX_NONE)
+	{
+		Slots.RemoveAt(Idx);
 		UpdateTotalWeight();
 	}
+}
+
+FPZInventorySlot* UPZInventoryComponent::FindSlot(UPZItemData* Item)
+{
+	return Slots.FindByPredicate([&](const FPZInventorySlot& S)
+	{
+		return S.ItemData == Item;
+	});
+}
+
+const FPZInventorySlot* UPZInventoryComponent::FindSlot(UPZItemData* Item) const
+{
+	return Slots.FindByPredicate([&](const FPZInventorySlot& S)
+	{
+		return S.ItemData == Item;
+	});
+}
+
+TArray<UPZItemData*> UPZInventoryComponent::GetItems() const
+{
+	TArray<UPZItemData*> Out;
+	Out.Reserve(Slots.Num());
+	for (const FPZInventorySlot& S : Slots)
+	{
+		Out.Add(S.ItemData);
+	}
+	return Out;
 }
 
 void UPZInventoryComponent::UpdateTotalWeight()
 {
 	float NewTotalWeight = 0.0f;
-	for (const auto& Item : Items)
+	for (const FPZInventorySlot& S : Slots)
 	{
-		if (Item)
+		if (S.ItemData)
 		{
-			NewTotalWeight += Item->ItemWeight;
+			NewTotalWeight += S.ItemData->ItemWeight;
 		}
 	}
 
 	CurrentTotalWeight = NewTotalWeight;
 
-	// 무게가 변경되었음을 다른 클래스(예: 캐릭터)에게 알립니다.
 	if (OnInventoryChanged.IsBound())
 	{
 		OnInventoryChanged.Broadcast();

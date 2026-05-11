@@ -115,10 +115,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats", meta = (ClampMin = "0"))
 	float BaseDamage = 50.0f;
 
-	/** 총알 초기 속도 (cm/s). 기본 50000 ≈ 500m/s */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats", meta = (ClampMin = "0"))
-	float BulletInitialSpeed = 50000.0f;
-
 	/**
 	 * 최대 사거리 (cm). 이 거리를 넘으면 총알이 소멸.
 	 * 기본 100000 = 1000m  /  샷건 권장 10000~20000 (100~200m)
@@ -136,6 +132,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats", meta = (ClampMin = "0"))
 	float FalloffStartRange = 10000.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
+	float FireRate = 0.1f; // 초당 발사 간격 (예: 0.1이면 1초에 10발)
+
 	/**
 	 * 데미지 감소 종료 거리 (cm).
 	 * 이 거리부터는 MinDamagePercent 고정.
@@ -148,28 +147,36 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float MinDamagePercent = 0.6f;
 
+	// ─── 조준원(크로스헤어 원) 설정 ─────────────────────────────────────────
+
 	/**
-	 * 헤드샷 유효 사거리 (cm).
-	 * 이 거리 이내면 마우스가 머리 위에 정확히 있을 때 100% 헤드샷.
-	 * 이 거리 초과 ~ MaxRange 구간에서 헤드샷 확률 선형 감쇠 (마우스 정조준이어도).
-	 * 기본 5000 = 50m (권총).  소총 권장: 20000 (200m).
+	 * 최소 유효 사거리 (cm).
+	 * 이 거리 이내에서는 조준원이 MinCrosshairRadius로 고정.
+	 * 권총 권장: 1000 (10m), 소총 권장: 3000 (30m).
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats", meta = (ClampMin = "0"))
-	float HeadshotEffectiveRange = 5000.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats|Crosshair", meta = (ClampMin = "0"))
+	float MinEffectiveRange = 1000.0f;
+
+	/** 최소 조준원 반지름 (화면 픽셀). MinEffectiveRange 이내 고정 크기. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats|Crosshair", meta = (ClampMin = "1"))
+	float MinCrosshairRadius = 15.0f;
+
+	/** 최대 조준원 반지름 (화면 픽셀). MaxRange 도달 시 크기. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats|Crosshair", meta = (ClampMin = "1"))
+	float MaxCrosshairRadius = 120.0f;
+
+	/**
+	 * 조준(ADS) 시 조준원 크기 배율 (0.0~1.0).
+	 * 0.3 = ADS 시 30% 크기로 축소.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats|Crosshair", meta = (ClampMin = "0.05", ClampMax = "1.0"))
+	float AimCrosshairMultiplier = 0.35f;
 
 	// ─── 샷건 전용 설정 ─────────────────────────────────────────────────
 
 	/** 샷건 산탄 수 (Shotgun 전용) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats|Shotgun", meta = (ClampMin = "1"))
 	int32 ShotgunPelletCount = 8;
-
-	/** 비조준 시 산탄 확산 반각 (도). 원뿔의 절반 각도. 기본 10° */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats|Shotgun", meta = (ClampMin = "0.0", ClampMax = "45.0"))
-	float ShotgunSpreadAngle = 10.0f;
-
-	/** 조준(ADS) 시 산탄 확산 반각 (도). 비조준보다 좁아야 함. 기본 4° */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Stats|Shotgun", meta = (ClampMin = "0.0", ClampMax = "45.0"))
-	float ShotgunAimSpreadAngle = 4.0f;
 
 	// ─── 근접무기 전용 설정 ──────────────────────────────────────────────
 
